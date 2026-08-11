@@ -1,0 +1,38 @@
+Bootstrap: docker
+From: docker.io/lumiaifactory/lumi-multitorch:torch-u24r70f21m50t210-20260513_121430
+
+%labels
+    Author Haackesk
+    Description "LUMI ROCm environment for downscaling diffusion models"
+    Python "3.12.3"
+    ROCm "7.0.2"
+    PyTorch "2.10.0"
+
+%post
+    set -eux
+
+    # The LUMI base image keeps Python packages in this environment.
+    . /opt/venv/bin/activate
+
+    python -m pip install --no-cache-dir \
+        lightning==2.6.5 \
+        earthkit==1.0.0 \
+        zarr==3.3.0 \
+        toml==0.10.2 \
+        tensorboard==2.21.0
+
+    python -m pip check
+
+%environment
+    export PATH=/opt/venv/bin:$PATH
+    export PYTHONUNBUFFERED=1
+
+%test
+    . /opt/venv/bin/activate
+
+    python -c "import torch; print('PyTorch:', torch.__version__)"
+    python -c "import torchvision; print('TorchVision:', torchvision.__version__)"
+    python -c "import lightning; print('Lightning:', lightning.__version__)"
+
+%runscript
+    exec python "$@"
