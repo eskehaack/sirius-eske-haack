@@ -1,5 +1,6 @@
 .venv/
 __pycache__/
+.vscode/
 
 checkpoints/
 sandbox/
@@ -9,5 +10,8 @@ samples/
 
 data/
 
+*.sif
 
 *birth*
+
+core
