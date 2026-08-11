@@ -1,0 +1,22 @@
+\section*{Thesis TODOs}
+
+\begin{enumerate}
+    \item Learning rate scheduler
+\end{enumerate}
+
+\section*{Figure outs}
+\begin{enumerate}
+    \item What to do when epochs are 3 hours of training long? Validations happen seldom, early stopping is no good, difficult to test, etc.
+    \item Normalization on weather data. Model does not learn scale, but since scale is important for climate how do we "rescale" (un-normalize) the data?
+    \item \st{Should I start without precipitation?} No, include precipitation.
+\end{enumerate}
+
+\section*{Decisions}
+\begin{enumerate}
+    \item To figure out how to mix training and inference data run the following configurations on a subset. 
+    \begin{itemize}
+        \item Train historical + 1 realization (both scenarios). Infer on different realization
+        \item Train on historical + 1 scenario (370) (all realizations). Infer on the other scenario (126)
+        \item Train on historical + 1 realization (both scenarios) but do intermittent validation blocks (Mikhail's setup).
+    \end{itemize}
+\end{enumerate}
