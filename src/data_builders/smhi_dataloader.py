@@ -181,6 +181,7 @@ class ClimateDataBuilder:
         )
     
         print(f"Saving global stats to {path}")
+        Path(path).absolute().parent.mkdir(parents=True, exist_ok=True)
         stats.to_netcdf(path)
         self.stats = stats
 
@@ -273,6 +274,11 @@ class ClimateDataBuilder:
             self.date_config["train_blocks"]
         )
         self.train_idx = train_idx
+        print("Training indices:")
+        print("shape", train_idx.shape)
+        print("max", train_idx.max())
+        print("min", train_idx.min())
+        print("blocks", self.date_config["train_blocks"])
 
         print(f"Building the target indices...")
         val_idx = build_indices(
@@ -283,6 +289,12 @@ class ClimateDataBuilder:
 
         print(f"Preprocessing the data...")
         self.preprocessing()
+
+        print("Training indices...... again:")
+        print("shape", train_idx.shape)
+        print("max", train_idx.max())
+        print("min", train_idx.min())
+        print("blocks", self.date_config["train_blocks"])
 
     def build_inference_set(self):
         print(f"Loading predictors...")
@@ -339,7 +351,7 @@ class ClimateDataBuilder:
             )
 
 class TrainingDataset(Dataset):
-    def __init__(self, predictors_path, static_features_path, targets_path, indices):
+    def __init__(self, predictors_path, static_features_path, targets_path, blocks):
         self.predictors = xr.open_dataarray(predictors_path)
         self.predictors_variables = list(self.predictors.channel.values)
         predictors_spatial_dims = [
@@ -359,7 +371,8 @@ class TrainingDataset(Dataset):
             static_features.to_array().values.astype(np.float32)
         )
         self.target_grid = tuple(static_features.sizes.values())
-        
+
+        indices = build_indices(self.predictors, blocks)
         self.indices = np.array(indices)
         self.length = len(self.indices)
 

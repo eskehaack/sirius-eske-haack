@@ -15,36 +15,41 @@ class DataModule(pl.LightningDataModule):
         self,
         batch_size: int = 8,
         num_workers: int = 4,
+        config_path: str = "./src/configs/training_config.toml",
     ):
         super().__init__()
         self.batch_size = batch_size
         self.num_workers = num_workers
+        self.config_path = config_path
 
     def setup(self, stage: Optional[str] = None):
-        
-        config_path = '/work3/s214643/sirius/src/configs/training_config.toml'
+
+        date_config = parse_config(config_path=self.config_path, config_keyword="dates")
         self.data_builder = ClimateDataBuilder(
-            date_config = parse_config(config_path=config_path, config_keyword="dates"),
-            preprocessing_config = parse_config(config_path=config_path, config_keyword="preprocessing"),
-            predictor_config = parse_config(config_path=config_path, config_keyword="predictors"),
-            static_features_config = parse_config(config_path=config_path, config_keyword="static_features"),
-            target_config = parse_config(config_path=config_path, config_keyword="targets"),
+            date_config=date_config,
+            preprocessing_config = parse_config(config_path=self.config_path, config_keyword="preprocessing"),
+            predictor_config = parse_config(config_path=self.config_path, config_keyword="predictors"),
+            static_features_config = parse_config(config_path=self.config_path, config_keyword="static_features"),
+            target_config = parse_config(config_path=self.config_path, config_keyword="targets"),
         )
-        self.data_builder.build_training_set()
+
+        data_path_config = parse_config(config_path=self.config_path, config_keyword="preprocessing")
 
         self.train_ds = TrainingDataset(
-            predictors_path="/work3/s214643/sirius/data/ec_earth_zarr/predictors.zarr",
-            targets_path="/work3/s214643/sirius/data/ec_earth_zarr/targets.zarr",
-            static_features_path="/work3/s214643/sirius/data/ec_earth_zarr/static.zarr",
-            indices=self.data_builder.train_idx,
+            predictors_path=data_path_config["predictors_output"],
+            targets_path=data_path_config["targets_output"],
+            static_features_path=data_path_config["static_output"],
+            blocks=date_config.get("train_blocks"),
         )
+        print(f"Training dataset size: {len(self.train_ds)} samples")
 
         self.val_ds = TrainingDataset(
-            predictors_path="/work3/s214643/sirius/data/ec_earth_zarr/predictors.zarr",
-            targets_path="/work3/s214643/sirius/data/ec_earth_zarr/targets.zarr",
-            static_features_path="/work3/s214643/sirius/data/ec_earth_zarr/static.zarr",
-            indices=self.data_builder.val_idx,
+            predictors_path=data_path_config["predictors_output"],
+            targets_path=data_path_config["targets_output"],
+            static_features_path=data_path_config["static_output"],
+            blocks=date_config.get("val_blocks"),
         )
+        print(f"Validation dataset size: {len(self.val_ds)} samples")
 
     def train_dataloader(self):
         return DataLoader(

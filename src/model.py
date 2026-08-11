@@ -8,6 +8,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import lightning.pytorch as pl
 
+from src.callbacks.timer import log_time
+
 # -------------------------
 # Time embeddings
 # -------------------------
@@ -211,6 +213,7 @@ class LitConditionalDDPM(pl.LightningModule):
         alpha_bars = torch.cumprod(alphas, dim=0)
 
         self.image_size = image_size
+        self.lr = lr
 
         self.register_buffer("betas", betas)
         self.register_buffer("alphas", alphas)
@@ -258,6 +261,7 @@ class LitConditionalDDPM(pl.LightningModule):
 
         return x0, condition
 
+    @log_time
     def training_step(self, batch, batch_idx, noise_channel: int = 0):
         x0, condition = self._load_batch(batch)
 
@@ -343,8 +347,9 @@ class LitConditionalDDPM(pl.LightningModule):
         return x.clamp(-1, 1)
 
     def configure_optimizers(self):
+        # Optimizer and scheduler
         optimizer = torch.optim.AdamW(self.parameters(), lr=self.hparams.lr)
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-            optimizer, T_max=self.hparams.max_epochs, eta_min=1e-6
+            optimizer, T_max=self.hparams.max_epochs, eta_min=self.lr
         )
-        return [optimizer], [scheduler]
+        return [optimizer], [{"scheduler": scheduler, "interval": "step"}]
