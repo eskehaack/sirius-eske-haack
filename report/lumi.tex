@@ -1,0 +1,38 @@
+\section*{Known errors and possible solutions}
+
+\subsection*{MI Open}
+\textbf{Signature: } RuntimeError: miopenStatusInternalError or filesystem error: cannot set permissions: Operation not permitted\\
+\textbf{Solution: } Set the MIOPEN cache dir in the slurm script:
+\begin{lstlisting}
+export TMPDIR="/tmp/$USER/$SLURM_JOB_ID"
+export SINGULARITY_TMPDIR="$TMPDIR"
+export SINGULARITY_CACHEDIR="$TMPDIR"
+
+mkdir -p "$TMPDIR"
+chmod 700 "$TMPDIR"
+
+export MIOPEN_USER_DB_PATH="$TMPDIR/miopen-db"
+export MIOPEN_CUSTOM_CACHE_DIR="$TMPDIR/miopen-cache"
+
+mkdir -p "$MIOPEN_USER_DB_PATH"
+mkdir -p "$MIOPEN_CUSTOM_CACHE_DIR"
+\end{lstlisting}
+
+\subsection*{Fatal Error for executeable}
+\textbf{Signature: } FATAL:   " ": executable file not found in \$PATH \\
+\textbf{Solution: } You probably left some whitespace after a backslash in the slurm-script. This happened for me when I did
+\begin{lstlisting}
+    srun --account=project_465002687 singularity exec \
+    --bind path/to/data \
+    "$SIF" \
+    python -m src.sample \  
+        --run_id "$SLURM_JOB_ID"
+\end{lstlisting}
+Instead of:
+\begin{lstlisting}
+    srun --account=project_465002687 singularity exec \
+    --bind path/to/data \
+    "$SIF" \
+    python -m src.sample \
+        --run_id "$SLURM_JOB_ID"
+\end{lstlisting}
