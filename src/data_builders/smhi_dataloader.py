@@ -1,3 +1,9 @@
+"""
+The original author of this code is: Mikhail Ivanov (https://github.com/mikhail-a-ivanov) as part of his work for the Swedish Meteorological and Hydrological Institute (SMHI). 
+The code has been modified by the current author to suit specific needs, under the approval of Mikhail Ivanov.
+"""
+
+
 import os
 import glob
 from pathlib import Path
