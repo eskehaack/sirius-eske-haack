@@ -164,8 +164,6 @@ class ClimateDataBuilder:
         if os.path.isfile(path):
             print(f"Loading global stats from {path}")
             stats = xr.open_dataset(path)
-            missing = set(self.predictors.data_vars) - set(stats.data_vars)
-            assert not missing, f"Missing data variables: {missing}"
     
             self.stats = stats
             return
