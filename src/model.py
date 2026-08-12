@@ -221,6 +221,8 @@ class LitConditionalDDPM(pl.LightningModule):
         self.register_buffer("sqrt_alpha_bars", torch.sqrt(alpha_bars))
         self.register_buffer("sqrt_one_minus_alpha_bars", torch.sqrt(1.0 - alpha_bars))
 
+        self.static = None  # Allocation
+
     def q_sample(
         self, x0: torch.Tensor, t: torch.Tensor, noise: torch.Tensor
     ) -> torch.Tensor:
@@ -250,14 +252,16 @@ class LitConditionalDDPM(pl.LightningModule):
             align_corners=False,
         )
 
-        static = F.interpolate(
-            static,
-            size=(self.image_size, self.image_size),
-            mode="bilinear",
-            align_corners=False,
-        )
+        # Only interpolate static once and store it for future use
+        if self.static is None:
+            self.static = F.interpolate(
+                static,
+                size=(self.image_size, self.image_size),
+                mode="bilinear",
+                align_corners=False,
+            )
 
-        condition = torch.cat([condition, static], dim=1)
+        condition = torch.cat([condition, self.static], dim=1)
 
         return x0, condition
 
