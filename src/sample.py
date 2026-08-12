@@ -11,16 +11,7 @@ from src.model import LitConditionalDDPM
 from src.data_builders.dataloader import DataModule
 
 
-# ----------------------------------------------------
-# Configuration
-# ----------------------------------------------------
-
-DATA_DIR = "./.data/preprocessed"
-
-
-def main(
-    run_id: str, checkpoint: str = "last", sample_dim: int = 0
-):
+def load_checkpoint(run_id: str, checkpoint: str = "last") -> LitConditionalDDPM:
     # ----------------------------------------------------
     # Load model
     # ----------------------------------------------------
@@ -34,11 +25,9 @@ def main(
     model = LitConditionalDDPM.load_from_checkpoint(checkpoint_path)
     model.eval()
     model.to(device)
+    return model
 
-    out_dir = Path(f"./samples/{run_id}")
-    out_dir = out_dir / time.strftime("%Y%m%d%H%M%S")
-    out_dir.mkdir(exist_ok=False, parents=True)
-
+def load_data():
     # ----------------------------------------------------
     # Load conditioning image
     # ----------------------------------------------------
@@ -48,131 +37,193 @@ def main(
         num_workers=1,
     )
     datamodule.setup()
+    datamodule.data_builder._get_global_stats()
     stats = datamodule.data_builder.stats
+    if stats is None:
+        raise ValueError("Normalization stats not found.")
 
-    x, y, static, idx = next(iter(datamodule.val_dataloader()))
+    return datamodule
 
-    org_condition_shape = x.shape[-2:]
-    
+
+def get_interpolated(img_size, x, static) -> tuple[torch.Tensor]:
+    # ----------------------------------------------------
+    # Match interpolation from training
+    # ----------------------------------------------------
+
     condition = F.interpolate(
         x,
-        size=(model.image_size, model.image_size),
+        size=(img_size, img_size),
         mode="bilinear",
         align_corners=False,
     )
 
     static = F.interpolate(
         static,
-        size=(model.image_size, model.image_size),
+        size=(img_size, img_size),
         mode="bilinear",
         align_corners=False,
     )
 
-    condition = torch.cat([condition, static], dim=1)
+    return torch.cat([condition, static], dim=1)
 
-    target = torch.stack(
-        list(y.values()),
-        dim=1,
-    )
-
-    org_target_shape = target.shape[-2:]
-
-    target = F.interpolate(
-        target,
-        size=(model.image_size, model.image_size),
-        mode="bilinear",
-        align_corners=False,
-    )
-
+def normalize(condition, n_variables, stats, device):
     # ----------------------------------------------------
     # IMPORTANT:
     # Use EXACTLY the same normalization as training
     # ----------------------------------------------------
+    mean = torch.stack([torch.tensor(stat.mean().values) for stat in stats.values()])
+    std = torch.stack([torch.tensor(stat.std().values) for stat in stats.values()]) + 1e-6
 
-    # mean = torch.stack([torch.tensor(stat.mean().values) for stat in stats.values()])
-    # std = torch.stack([torch.tensor(stat.std().values) for stat in stats.values()]) + 1e-6
-
-    # mean = F.pad(mean, (0, condition.shape[1] - mean.shape[0]), value=0.0).reshape(1, -1, 1, 1)
-    # std = F.pad(std, (0, condition.shape[1] - std.shape[0]), value=1.0).reshape(1, -1, 1, 1)
-
-    mean = condition.mean()
-    std = condition.std() + 1e-6
+    mean = F.pad(mean, (0, condition.shape[1] - mean.shape[0]), value=0.0).reshape(1, -1, 1, 1)
+    std = F.pad(std, (0, condition.shape[1] - std.shape[0]), value=1.0).reshape(1, -1, 1, 1)
 
     condition_norm = (condition - mean) / std
     condition_tensor = condition_norm.to(device)
 
-    # ----------------------------------------------------
-    # Sample
-    # ----------------------------------------------------
+    mean_target_vars = mean[:, :n_variables, :, :]
+    std_target_vars = std[:, :n_variables, :, :]
 
-    with torch.no_grad():
-        prediction = model.sample(
-            condition_tensor,
-            num_steps=250,  # DDIM-like speedup
-        )
+    return condition_tensor, mean_target_vars, std_target_vars
 
-    prediction = prediction.cpu()
+def plot_prediction(metrics, variables, out_dir, cbar_labels):
+    n_vars = len(variables)
+    n_metrics = len(metrics)
 
-    # Undo normalization
-    prediction = prediction * std + mean
-
-    # Scale down to original size
-    condition = F.interpolate(
-        condition,
-        size=org_condition_shape,
-        mode="bilinear",
-        align_corners=False,
+    # Scale figure size with number of variables
+    fig, axes = plt.subplots(
+        n_metrics,
+        n_vars,
+        figsize=(3.5 * n_vars, 3.0 * n_metrics),
+        squeeze=False,
     )
 
-    prediction = F.interpolate(
-        prediction,
-        size=org_target_shape,
-        mode="bilinear",
-        align_corners=False,
-    )
+    for i, metric in enumerate(metrics):
+        for j, variable in enumerate(variables):
+            img = metrics[metric][j]
 
-    # ----------------------------------------------------
-    # Save arrays
-    # ----------------------------------------------------
+            ax = axes[i, j]
 
-    np.save(out_dir / "prediction.npy", prediction)
+            mappable = ax.imshow(
+                img,
+                cmap="coolwarm",
+                origin="lower",
+                vmin=img.min().item(),
+                vmax=img.max().item(),
+            )
 
-    # ----------------------------------------------------
-    # Plot comparison
-    # ----------------------------------------------------
+            # Variable name on top of each column
+            if i == 0:
+                ax.set_title(str(variable), fontsize=12, pad=8)
 
-    
-    fig = plt.figure(figsize=(15, 5), layout="constrained")
-    grid = fig.add_gridspec(1, 4, width_ratios=[1, 1, 1, 0.05])
+            ax.axis("off")
 
-    ax = [fig.add_subplot(grid[0, i]) for i in range(3)]
-    cax = fig.add_subplot(grid[0, 3])
+            # Small colorbar attached directly to the image
+            cbar = fig.colorbar(
+                mappable,
+                ax=ax,
+                fraction=0.035,
+                pad=0.02,
+                aspect=30,
+            )
+            cbar.set_label(cbar_labels[j][i], fontsize=10)
 
-    condition_img = condition[0, sample_dim]
-    prediction_img = prediction[0, sample_dim]
-    target_img = target[0, sample_dim]
-
-    vmin = min(img.min().item() for img in [condition_img, prediction_img, target_img])
-    vmax = max(img.max().item() for img in [condition_img, prediction_img, target_img])
-
-    for axis, title, image in zip(
-        ax,
-        ["Condition", "Generated", "Ground Truth"],
-        [condition_img, prediction_img, target_img],
-    ):
-        mappable = axis.imshow(
-            image.detach().cpu(),
-            cmap="coolwarm",
-            vmin=vmin,
-            vmax=vmax,
-            origin="lower",
+        # Metric name on the left of each row
+        axes[i, 0].text(
+            -0.25,
+            0.5,
+            str(metric),
+            transform=axes[i, 0].transAxes,
+            rotation=90,
+            va="center",
+            ha="center",
+            fontsize=12,
         )
-        axis.set_title(title)
-        axis.axis("off")
 
-    fig.colorbar(mappable, cax=cax, label="Temperature")
+    fig.savefig(out_dir / "comparison.png", dpi=300)
+    plt.close(fig)
 
-    plt.savefig(out_dir / "comparison.png", dpi=300)
+
+def main(
+    run_id: str, checkpoint: str = "last", ensemble_size: int = 5, load_from_npy: str = None
+):
+
+    if load_from_npy is not None and Path(load_from_npy).exists():
+        out_dir = Path(load_from_npy)
+        if (out_dir / "prediction.npy").exists() and (out_dir / "target.npy").exists():
+            prediction = torch.from_numpy(np.load(out_dir / "prediction.npy"))
+            target = torch.from_numpy(np.load(out_dir / "target.npy"))
+            print(f"Loaded prediction and target from {out_dir}")
+
+    else:
+        out_dir = Path(f"./samples/{run_id}")
+        out_dir = out_dir / time.strftime("%Y%m%d%H%M%S")
+
+        model = load_checkpoint(run_id, checkpoint)
+        datamodule = load_data()
+        x, y, static, idx = next(iter(datamodule.val_dataloader()))
+
+        # Create Target
+        target = torch.stack(list(y.values()), dim =1)
+        n_targets = target.shape[1]
+
+        condition = get_interpolated(model.image_size, x, static)
+        condition_tensor, mean_target_vars, std_target_vars = normalize(condition, n_targets, datamodule.data_builder.stats, model.device)
+
+        # ----------------------------------------------------
+        # Sample
+        # ----------------------------------------------------
+        with torch.no_grad():
+            prediction = torch.concat([
+                model.sample(
+                    condition_tensor,
+                    num_steps=500,
+                )
+                for _ in range(ensemble_size)
+            ], dim=0)
+
+        # Interpolate back to original size
+        prediction = F.interpolate(
+            prediction,
+            size=target.shape[-2:],
+            mode="bilinear",
+            align_corners=False,
+        )
+
+        prediction = prediction.cpu()
+
+        # Undo normalization
+        # prediction = prediction * std_target_vars + mean_target_vars
+        # target = target * std_target_vars + mean_target_vars
+
+        # ----------------------------------------------------
+        # Save arrays
+        # ----------------------------------------------------
+
+        out_dir.mkdir(exist_ok=False, parents=True)
+        np.save(out_dir / "prediction.npy", prediction)
+        np.save(out_dir / "target.npy", target)
+
+        prediction = prediction.detach().cpu()
+        target = target.detach().cpu()
+
+    # ----------------------------------------------------
+    # Calculate prediction statistics
+    # ----------------------------------------------------
+
+    prediction_mean = prediction.mean(dim=0)
+    prediction_std = prediction.std(dim=0)
+
+    metrics = {
+        "Prediction Std": prediction_std, 
+        "Prediction Mean": prediction_mean, 
+        "Ground Truth": target.squeeze()
+    }
+    colorbar_labels = [["Uncertainty", "Temperature [K]", "Temperature [K]"] for _ in range(3)]
+    colorbar_labels.append(["Uncertainty", "Precipitation [mm/second]", "Precipitation [mm/second]"])
+    variables = ["Mean Temperature", "Minimum Temperature", "Maximum Temperature", "Precipitation"]
+
+    plot_prediction(metrics, variables=variables, out_dir=out_dir, cbar_labels=colorbar_labels)
+
 
 
 def parse_args():
@@ -187,10 +238,17 @@ def parse_args():
     )
 
     parser.add_argument(
-        "--sample_dim",
+        "--ensemble_size",
         type=int,
-        default=0,
-        help="What index of the sample image to show",
+        default=5,
+        help="How many images in the ensamble to generate",
+    )
+
+    parser.add_argument(
+        "--load_from_npy",
+        type=str,
+        default=None,
+        help="Path to the .npy file containing the data to load",
     )
 
     return parser.parse_args()
@@ -198,4 +256,4 @@ def parse_args():
 
 if __name__ == "__main__":
     args = parse_args()
-    main(args.run_id, args.checkpoint, args.sample_dim)
+    main(args.run_id, args.checkpoint, args.ensemble_size, args.load_from_npy)
