@@ -4,7 +4,7 @@
 #SBATCH --partition=small-g
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --cpus-per-task=16
+#SBATCH --cpus-per-task=1
 #SBATCH --gpus-per-task=1
 #SBATCH --mem=32G
 #SBATCH --time=00:10:00
@@ -55,4 +55,5 @@ srun --account=project_465002687 singularity exec \
     --bind /scratch/project_465002687/ec_earth:/scratch/project_465002687/ec_earth \
     "$SIF" \
     python -m src.sample \
-        --run_id "20990724"
+        --run_id "21003382" \
+        --ensemble_size 5
