@@ -10,7 +10,6 @@ import torch.nn.functional as F
 from src.model import LitConditionalDDPM
 from src.data_builders.dataloader import DataModule
 
-
 def load_checkpoint(run_id: str, checkpoint: str = "last") -> LitConditionalDDPM:
     # ----------------------------------------------------
     # Load model
@@ -92,9 +91,10 @@ def unnormalize(prediction, target, stats, n_variables):
 
     return prediction, target
 
-def plot_prediction(metrics, variables, out_dir, cbar_labels):
+def plot_prediction(metrics, variables, scales, out_dir, cbar_labels, ensemble_size):
     n_vars = len(variables)
     n_metrics = len(metrics)
+    ensemble_size = ensemble_size
 
     # Scale figure size with number of variables
     fig, axes = plt.subplots(
@@ -104,18 +104,20 @@ def plot_prediction(metrics, variables, out_dir, cbar_labels):
         squeeze=False,
     )
 
+    fig.suptitle(f"Comparison of Prediction and Ground Truth [Ensemble Size: {ensemble_size}]")
+
     for i, metric in enumerate(metrics):
         for j, variable in enumerate(variables):
             img = metrics[metric][j]
-
+            vmin, vmax = scales[i][j]
             ax = axes[i, j]
 
             mappable = ax.imshow(
                 img,
                 cmap="coolwarm",
                 origin="lower",
-                vmin=img.min().item(),
-                vmax=img.max().item(),
+                vmin=vmin,
+                vmax=vmax,
             )
 
             # Variable name on top of each column
@@ -227,19 +229,53 @@ def main(
     # Calculate prediction statistics
     # ----------------------------------------------------
 
+    # Scale precipitation to mm/day for plotting
+    prediction[:, 3, :, :] *= 86400
+    target[:, 3, :, :] *= 86400
+
     prediction_mean = prediction.mean(dim=0)
     prediction_std = prediction.std(dim=0)
+    target = target.squeeze()
+    asb_err = torch.abs(prediction_mean - target)
+
+    min_temp_std = prediction_std[0:3].min().item()
+    max_temp_std = prediction_std[0:3].max().item()
+    min_prec_std = prediction_std[3].min().item()
+    max_prec_std = prediction_std[3].max().item()
+    scale_std = [(min_temp_std, max_temp_std), (min_temp_std, max_temp_std), (min_temp_std, max_temp_std), (min_prec_std, max_prec_std)]
+
+    min_temp = min(prediction_mean[1].min().item(), target[1].min().item())
+    max_temp = max(prediction_mean[2].max().item(), target[2].max().item())
+    min_prec = min(prediction_mean[3].min().item(), target[3].min().item())
+    max_prec = max(prediction_mean[3].max().item(), target[3].max().item())
+    scale_mean = [(min_temp, max_temp), (min_temp, max_temp), (min_temp, max_temp), (min_prec, max_prec)]
+
+    min_temp_err = asb_err[0:3].min().item()
+    max_temp_err = asb_err[0:3].max().item()
+    min_prec_err = asb_err[3].min().item()
+    max_prec_err = asb_err[3].max().item()
+    scale_err = [(min_temp_err, max_temp_err), (min_temp_err, max_temp_err), (min_temp_err, max_temp_err), (min_prec_err, max_prec_err)]
+
+    scales = [scale_std, scale_mean, scale_mean, scale_err]
 
     metrics = {
-        "Prediction Std": prediction_std, 
-        "Prediction Mean": prediction_mean, 
-        "Ground Truth": target.squeeze()
+        "Prediction Std": prediction_std,
+        "Prediction Mean": prediction_mean,
+        "Ground Truth": target,
+        "Absolute Error": asb_err
     }
-    colorbar_labels = [["Uncertainty", "Temperature [K]", "Temperature [K]"] for _ in range(3)]
-    colorbar_labels.append(["Uncertainty", "Precipitation [mm/day]", "Precipitation [mm/day]"])
+    colorbar_labels = [["Uncertainty", "Temperature [K]", "Temperature [K]", "Absolute Error"] for _ in range(3)]
+    colorbar_labels.append(["Uncertainty", "Precipitation [mm/day]", "Precipitation [mm/day]", "Absolute Error"])
     variables = ["Mean Temperature", "Minimum Temperature", "Maximum Temperature", "Precipitation"]
 
-    plot_prediction(metrics, variables=variables, out_dir=out_dir, cbar_labels=colorbar_labels)
+    plot_prediction(
+        metrics, 
+        variables=variables, 
+        scales=scales,
+        out_dir=out_dir, 
+        cbar_labels=colorbar_labels, 
+        ensemble_size=args.ensemble_size
+    )
 
 
 
