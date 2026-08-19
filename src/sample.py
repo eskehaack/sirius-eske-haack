@@ -45,7 +45,7 @@ def load_data():
     return datamodule
 
 
-def get_interpolated(img_size, x, static) -> tuple[torch.Tensor]:
+def get_interpolated(img_size, x, static, target) -> tuple[torch.Tensor]:
     # ----------------------------------------------------
     # Match interpolation from training
     # ----------------------------------------------------
@@ -64,26 +64,33 @@ def get_interpolated(img_size, x, static) -> tuple[torch.Tensor]:
         align_corners=False,
     )
 
-    return torch.cat([condition, static], dim=1)
+    target = F.interpolate(
+        target,
+        size=(img_size, img_size),
+        mode="bilinear",
+        align_corners=False,
+    )
 
-def normalize(condition, n_variables, stats, device):
+    return torch.cat([condition, static], dim=1), target
+
+def unnormalize(prediction, target, stats, n_variables):
     # ----------------------------------------------------
     # IMPORTANT:
     # Use EXACTLY the same normalization as training
     # ----------------------------------------------------
-    mean = torch.stack([torch.tensor(stat.mean().values) for stat in stats.values()])
-    std = torch.stack([torch.tensor(stat.std().values) for stat in stats.values()]) + 1e-6
-
-    mean = F.pad(mean, (0, condition.shape[1] - mean.shape[0]), value=0.0).reshape(1, -1, 1, 1)
-    std = F.pad(std, (0, condition.shape[1] - std.shape[0]), value=1.0).reshape(1, -1, 1, 1)
-
-    condition_norm = (condition - mean) / std
-    condition_tensor = condition_norm.to(device)
+    stat_tensor = torch.stack([torch.tensor(stat.values) for stat in stats.values()]).T
+    stat_tensor = stat_tensor.to(prediction.device)
+    mean, std = stat_tensor
+    mean = mean[None,:,None,None] # Map to shape 1, channels, 1, 1 for broadcast
+    std = std[None,:,None,None] # Map to shape 1, channels, 1, 1 for broadcast
 
     mean_target_vars = mean[:, :n_variables, :, :]
     std_target_vars = std[:, :n_variables, :, :]
 
-    return condition_tensor, mean_target_vars, std_target_vars
+    prediction = prediction * std_target_vars + mean_target_vars
+    target = target * std_target_vars + mean_target_vars
+
+    return prediction, target
 
 def plot_prediction(metrics, variables, out_dir, cbar_labels):
     n_vars = len(variables)
@@ -164,10 +171,12 @@ def main(
 
         # Create Target
         target = torch.stack(list(y.values()), dim =1)
+        target = target.to(model.device)
         n_targets = target.shape[1]
+        org_img_shape = target.shape[-2:]
 
-        condition = get_interpolated(model.image_size, x, static)
-        condition_tensor, mean_target_vars, std_target_vars = normalize(condition, n_targets, datamodule.data_builder.stats, model.device)
+        condition, target = get_interpolated(model.image_size, x, static, target)
+        condition = condition.to(model.device)
 
         # ----------------------------------------------------
         # Sample
@@ -175,25 +184,33 @@ def main(
         with torch.no_grad():
             prediction = torch.concat([
                 model.sample(
-                    condition_tensor,
+                    condition,
                     num_steps=500,
                 )
                 for _ in range(ensemble_size)
             ], dim=0)
 
+        # Undo normalization
+        prediction, target = unnormalize(prediction, target, datamodule.data_builder.stats, n_targets)
+
         # Interpolate back to original size
         prediction = F.interpolate(
             prediction,
-            size=target.shape[-2:],
+            size=org_img_shape,
+            mode="bilinear",
+            align_corners=False,
+        )
+
+        # Interpolate back to original size
+        target = F.interpolate(
+            target,
+            size=org_img_shape,
             mode="bilinear",
             align_corners=False,
         )
 
         prediction = prediction.cpu()
-
-        # Undo normalization
-        # prediction = prediction * std_target_vars + mean_target_vars
-        # target = target * std_target_vars + mean_target_vars
+        target = target.cpu()
 
         # ----------------------------------------------------
         # Save arrays
@@ -219,7 +236,7 @@ def main(
         "Ground Truth": target.squeeze()
     }
     colorbar_labels = [["Uncertainty", "Temperature [K]", "Temperature [K]"] for _ in range(3)]
-    colorbar_labels.append(["Uncertainty", "Precipitation [mm/second]", "Precipitation [mm/second]"])
+    colorbar_labels.append(["Uncertainty", "Precipitation [mm/day]", "Precipitation [mm/day]"])
     variables = ["Mean Temperature", "Minimum Temperature", "Maximum Temperature", "Precipitation"]
 
     plot_prediction(metrics, variables=variables, out_dir=out_dir, cbar_labels=colorbar_labels)
