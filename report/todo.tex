@@ -3,14 +3,18 @@
 \begin{enumerate}
     \item Learning rate scheduler
     \item Look back at the ecmwf course on ML for weather
+    \item Look into gamma-correction for precipitation
+    \item Look into BGS from \autoref{bgs-paper}. Can we guide image generation in pixels where we are certain of output data. I.e. scale the condition to target size, fill blank with zero, then guide the sampler with the error between that and the model estimate.
+    \item Look into predicting residuals of temperature instead of absolute values.
 \end{enumerate}
 
 \section*{Figure outs}
 \begin{enumerate}
-    \item Normalization on weather data. Model does not learn scale, but since scale is important for climate how do we "rescale" (un-normalize) the data?
     \item What about non-square, non-$2^n$ sized image-targets? Interpolation? Special architecture? (Targets are 412x424, nearest $2^n$ is 512, $412/(2^3)=51.5$).
     \item What to do when epochs are 3 hours of training long? Validations happen seldom, early stopping is no good, difficult to test, etc.
+    \item And what about cross-validation for hyperparameter tuning? It would take ages to do grid-search training
     \item Does it make sense to evaluate on number of heatwaves? This is obvious from the condition data, so the model would never outperform the quality of the input.
+    \item \st{Normalization on weather data. Model does not learn scale, but since scale is important for climate how do we "rescale" (un-normalize) the data?} You have to unnormalize properly....
     \item \st{Should I start without precipitation?} No, include precipitation.
 \end{enumerate}
 

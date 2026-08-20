@@ -1,0 +1,34 @@
+\section*{Literature}
+
+\subsection*{Can AI be enabled to perform dynamical downscaling?}
+\textbf{Author}: Elena Tomasi, et. al. \\
+\textbf{URL}: \hyperlink{arxiv} {https://arxiv.org/pdf/2406.13627}
+
+Using a latent diffusion for downscaling over the European domain. Target is 2m temperature and 10m wind in a 2km resolution. Input is ERA5. Compares to GANs.
+They train a UNET, then use an LDM to predict residuals between the UNET prediction and the ground truth. LDM is based on VAE (see: https://arxiv.org/pdf/2304.12891). Split decoder for output channels. LDM outperforms GAN and UNET.
+
+
+\subsection*{Physics Constrained Diffusion Models for
+Weather Forecasting}
+\textbf{Author}: Marie Jørgensen, et. al. \\
+\textbf{URL}: \hyperlink{findit}{https://findit.dtu.dk/catalog/69b0c0fa8f3041288e09acb2}
+
+Physics-based diffusion model. They introduce an extra loss term based on Quasi-geostrophic equations to contrain the DDPM to physics. Using 2x ResNet Blocks plus an 8-headed attention block as base model. Positive results.
+
+\subsection*{Dynamical-generative downscaling of climate model ensembles}
+\textbf{Author}: Ignacio Lopez-Gomez, et. al. \\
+\textbf{URL}: \hyperlink{findit}{https://findit.dtu.dk/catalog/6822922696db5b683e39d02e}
+
+Regional Residual Diffusion-based Downscaling model (R2-D2 model). 45km res to 9 km res over Western US domain. Using residuals instead of absolute targets. Have static features in target res as input. Targeting temperatures (2m) and wind speed (10m). Use a dynamical downscaling approach, where a physics-based numerical model downscales to a certain resolution, then the diffusion model downscales to target resolution.
+
+\subsection*{Downscaling Precipitation with Bias-informed Conditional Diffusion Model} \label{bgs-paper}
+\textbf{Author}: Ran Lyu, et. al. \\
+\textbf{URL}: \hyperlink{findit}{https://findit.dtu.dk/catalog/67c5124c9aed8f941d01ecee}
+
+Conditional diffusion model for precipitation. They use gamma-correction to account for the long tail on the precipitation distribution. U-Net backbone. Using Bias-aware guidance by subtracting $||y_t-x||_2$ from the generated mean during sampling.
+
+\subsection*{Semantic-Guided Diffusion Model for Single-Step Image Super-Resolution}
+\textbf{Author}: Zihang Liu, et. al. \\
+\textbf{URL}: \hyperlink{findit}{https://findit.dtu.dk/catalog/6840df76c98854683c8422f1}
+
+Main focus is on single-step image SR. Rewrite the forward process heavily to condition the model on semantics rather than low-res, using a Segment Anything Model (SAM). 
