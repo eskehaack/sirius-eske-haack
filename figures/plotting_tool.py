@@ -27,7 +27,7 @@ def precip_distribution():
     plt.savefig("./figures/precip_distribution.png", dpi=300, transparent=True)
     plt.close()
 
-def temp_domain():
+def temp_domain_ec_earth():
     """
     Shows the domain of the temperature data
     """
@@ -43,10 +43,31 @@ def temp_domain():
     p.axes.set_global()
     p.axes.coastlines()
     plt.title("Domain of Temperature Data for historical EC Earth data")
-    plt.savefig("./figures/temp_domain.png", dpi=300, transparent=True)
+    plt.savefig("./figures/ec_earth_domain.png", dpi=300, transparent=True)
     plt.close()
 
+def temp_domain_hclim():
+    """
+    Shows the domain of the orographic data
+    """
+    statics = Path("/scratch/project_465002687/ec_earth/predictors/static_features")
+    data_path = statics / "orog_EUR-12_EC-Earth3-Veg_historical_r1i1p1f1_HCLIMcom-SMHI_HCLIM43-ALADIN_v1-r1_fx.nc"
+    data = xr.open_dataset(data_path)
+    orog = data.orog
+
+    plt.figure(figsize=FIGSIZE)
+    p = orog.plot(
+        x="lon", y="lat", cmap="terrain",
+        subplot_kws=dict(projection=ccrs.Orthographic(10.45, 51.2), facecolor="gray"),
+        transform=ccrs.PlateCarree()
+    )
+    p.axes.set_global()
+    p.axes.coastlines()
+    plt.title("Domain of Orographic Data for historical EC Earth data")
+    plt.savefig("./figures/hclim_domain.png", dpi=300, transparent=True)
+    plt.close()
 
 if __name__ == "__main__":
-    precip_distribution()
-    temp_domain()
+    # precip_distribution()
+    # temp_domain_ec_earth()
+    temp_domain_hclim()
