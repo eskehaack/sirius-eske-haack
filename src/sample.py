@@ -265,7 +265,7 @@ def main(
         "Absolute Error": asb_err
     }
     colorbar_labels = [["Uncertainty", "Temperature [K]", "Temperature [K]", "Absolute Error"] for _ in range(3)]
-    colorbar_labels.append(["Uncertainty", "Precipitation [mm/day]", "Precipitation [mm/day]", "Absolute Error"])
+    colorbar_labels.append(["Uncertainty", "Precipitation [kg/m²/day]", "Precipitation [kg/m²/day]", "Absolute Error"])
     variables = ["Mean Temperature", "Minimum Temperature", "Maximum Temperature", "Precipitation"]
 
     plot_prediction(
