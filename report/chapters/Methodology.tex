@@ -1,0 +1,43 @@
+\chapter{Methodology}
+
+\section{Modifications to the diffusion model}
+
+\subsection{Conditional Diffusion Models} \label{sec:conditioning}
+
+The "standard" sampling strategy (see \autoref{sec:sampling}) allows the model to draw a sample from the latent space representation it was trained to create. While this is useful for unconditional data generation, it does not help much on the task of super-resolution. For the super-resolution task, it is important to have a methods of relating the generated sample to the low-resolution input in sampling time. In other words, it is undesirable to re-train the model for each input condition. It would be much more desirable to request the super-resolution for a specific condition after the model is trained. This both allows us to train vastly fewer models, and it allows for training on multiple data-points.
+
+The method, for which we will base this thesis on, was developed by Saharia, et. al. \cite{sr-diffusion} in 2021 (among the authors is also Ho, Jonathan, who authored the original DDPM-paper referenced earlier). The paper explains the process of super-resolution by iterative refinement on a conditional diffusion model. For now, let's focus on the condition diffusion-part. 
+
+The approach is simple. During training the model is shown a high-resolution target image along with a high-resolution conditional image. The high-resolution conditional is generated using a bicubic interpolation of the low-resolution image, to the target scale \cite{sr-diffusion}. The target and condition are then concatenated on the channel dimension to create the input:
+\begin{equation}
+    X_t = \{ y, C \}
+\end{equation}
+Where $y$ is the target image, and $C$ is the conditional image.
+
+In sampling, this method works in a very similar way, only here there is obviously no target. Instead the condition is concatenated to a noise sample, which fits the dimensionality of the desired target. This allows the network to have some information of the initial resolution of the image.
+
+The method comes with two caveats:
+\begin{enumerate}
+    \item The backbone model needs to be designed specifically for this purpose, as the number of channels for the input changes. It therefore destroys any hope of using a standard pre-trained diffusion model.
+    \item We have to make the assumption that a model can, within reason, interpolate between the conditional data and the target data. In most cases this is a fair assumption, but in some cases the condition data originates from a different data set than the target data (foreshadowing...).
+\end{enumerate}
+
+\subsection{Residual Target Learning}
+
+A common issue in machine learning is predicting the extreme. Logically, extremes do not often occur in data (hence the name), and are therefore difficult to correctly predict for most machine learning models. Often, this results in predictions that generally lie close to the overall mean of the target distribution. This is especially an issue in climate modelling as certain regions can exhibit locally extreme temperatures, that are difficult to model. This can be avoided by shifting the target of the model to instead predict residuals between the high-resolution and low-resolution data. Then the extreme events present in the condition data will be the point of reference for the target prediction.
+
+In this specific case, it means that instead of training the model to predict the noise added to the standardized absolute target values, we will shift to predict the noise added to the standardized residuals between the high-resolution and low-resolution data.
+
+If the low-resolution data shows a temperature of 10\textdegree C and the corresponding high-resolution data has data points with values; 9\textdegree C, 8\textdegree C, 12\textdegree C, and 7 \textdegree C, then the model should predict; -1\textdegree C, -2\textdegree C, +2\textdegree C, and -3\textdegree C.
+
+This changes shifts the focus of the model from predicting a full climate model to predicting the translation between the low-resolution and high-resolution data.
+
+\subsection{Gamma-correction}
+
+In image processing, one might run into the issue, that the dark parts of an image are too dark, perhaps it hides features you wish to show or it results in an undesirable tone of the image. The issue often arises as the human is more sensitive to darker tones than the lighter ones (in line with Stevens's power law). In other, more statistical terms, the human eye perceives light with a heavy right-tailed distribution. 
+
+To correct for such behaviour, we can "correct" the image using gamma-correction \cite{gamma-correction}. Gamma-correction works by applying a power to the image intensities:
+\begin{equation}
+    s = cr^{\gamma}
+\end{equation}
+Where $r$ is the original image, $c$ and $\gamma$ are selected hyper-parameters, and $s$ is the corrected image.

@@ -71,7 +71,10 @@
 \checkandfixthelayout                 % Check if errors in paper format!
 \sideparmargin{outer}                 % Put sidemargins in outer position (why the fuck is this option not default by the class?)
 
+\setlength{\parskip}{10pt}
+\setlength{\parindent}{0em}
 % Large environments
+\usepackage{inputenc}
 \usepackage{microtype}
 \usepackage{mathtools}
 \usepackage{listings}                 % Source code printer for LaTeX
@@ -349,5 +352,14 @@
 }
 \makeatother
 
-
-
+\newcommand{\cquote}[2]{
+    \begin{center}
+    \textit{#1}
+    \newline
+    -- #2
+    \end{center}
+}
+\usepackage{amsmath,amssymb}
+\usepackage{cancel}
+\usepackage{algpseudocode}
+\usepackage[acronym]{glossaries}

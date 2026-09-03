@@ -1,23 +1,206 @@
-@book{adams1980hitchhiker,
-    title={The hitchhiker's guide to the galaxy},
-    author={Adams, Douglas},
-    isbn={9780517542095},
-    lccn={80014572},
-    series={Hitchhiker's Guide to the Galaxy Series},
-    year={1980},
-    publisher={Harmony Books},
+% Primary papers
+
+@misc{ddpm,
+    title={Denoising Diffusion Probabilistic Models}, 
+    author={Jonathan Ho and Ajay Jain and Pieter Abbeel},
+    year={2020},
+    eprint={2006.11239},
+    archivePrefix={arXiv},
+    primaryClass={cs.LG},
+    url={https://arxiv.org/abs/2006.11239}, 
 }
-@misc{rfc2549,
-    author="D. Waitzman",
-    title="{IP over Avian Carriers with Quality of Service}",
-    series="Request for Comments",
-    number="2549",
-    howpublished="RFC 2549 (Informational)",
-    publisher="IETF",
-    organization="Internet Engineering Task Force",
-    year=1999,
-    month=04,
-    day="01",  
-    url="http://www.ietf.org/rfc/rfc2549.txt",
-    urldate={2014-09-28}
+
+% Secondary references
+
+@book{gamma-correction,
+  title={Digital Image Processing},
+  author={Gonzalez, R.C. and Woods, R.E.},
+  isbn={9780131687288},
+  lccn={2009289249},
+  url={https://books.google.dk/books?id=8uGOnjRGEzoC},
+  year={2008},
+  publisher={Prentice Hall}
 }
+
+@misc{universal-guidance,
+      title={Universal Guidance for Diffusion Models}, 
+      author={Arpit Bansal and Hong-Min Chu and Avi Schwarzschild and Soumyadip Sengupta and Micah Goldblum and Jonas Geiping and Tom Goldstein},
+      year={2023},
+      eprint={2302.07121},
+      archivePrefix={arXiv},
+      primaryClass={cs.CV},
+      url={https://arxiv.org/abs/2302.07121}, 
+}
+
+@misc{cfg-diffusion,
+      title={Classifier-Free Diffusion Guidance}, 
+      author={Jonathan Ho and Tim Salimans},
+      year={2022},
+      eprint={2207.12598},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG},
+      url={https://arxiv.org/abs/2207.12598}, 
+}
+
+@inproceedings{gan,
+ author = {Goodfellow, Ian J. and Pouget-Abadie, Jean and Mirza, Mehdi and Xu, Bing and Warde-Farley, David and Ozair, Sherjil and Courville, Aaron and Bengio, Yoshua},
+ booktitle = {Advances in Neural Information Processing Systems},
+ editor = {Z. Ghahramani and M. Welling and C. Cortes and N. Lawrence and K. Weinberger},
+ pages = {},
+ publisher = {Curran Associates, Inc.},
+ title = {Generative Adversarial Nets},
+ url = {https://proceedings.neurips.cc/paper_files/paper/2014/file/f033ed80deb0234979a61f95710dbe25-Paper.pdf},
+ volume = {27},
+ year = {2014}
+}
+
+@misc{sr-diffusion,
+      title={Image Super-Resolution via Iterative Refinement}, 
+      author={Chitwan Saharia and Jonathan Ho and William Chan and Tim Salimans and David J. Fleet and Mohammad Norouzi},
+      year={2021},
+      eprint={2104.07636},
+      archivePrefix={arXiv},
+      primaryClass={eess.IV},
+      url={https://arxiv.org/abs/2104.07636}, 
+}
+
+@misc{org-diffusion,
+      title={Deep Unsupervised Learning using Nonequilibrium Thermodynamics}, 
+      author={Jascha Sohl-Dickstein and Eric A. Weiss and Niru Maheswaranathan and Surya Ganguli},
+      year={2015},
+      eprint={1503.03585},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG},
+      url={https://arxiv.org/abs/1503.03585}, 
+}
+
+@misc{vae-intro,
+      title={Auto-Encoding Variational Bayes}, 
+      author={Diederik P Kingma and Max Welling},
+      year={2022},
+      eprint={1312.6114},
+      archivePrefix={arXiv},
+      primaryClass={stat.ML},
+      url={https://arxiv.org/abs/1312.6114}, 
+}
+
+%% Introduction
+
+@misc{un-climate,
+      title={State of the Global Climate 2025}, 
+      author={World Meteorological Organization (WMO)},
+      year={2025},
+      doi={https://doi.org/10.59327/WMO/S/CRI/SOC1}
+}
+
+@article{precip-temp-downscaling-cnn,
+    author = {Wang, Fang and Tian, Di and Lowe, Lisa and Kalin, Latif and Lehrter, John},
+    title = {Deep Learning for Daily Precipitation and Temperature Downscaling},
+    journal = {Water Resources Research},
+    volume = {57},
+    number = {4},
+    pages = {e2020WR029308},
+    keywords = {deep learning, downscaling, precipitation, temperature},
+    doi = {https://doi.org/10.1029/2020WR029308},
+    year = {2021}
+}
+
+@article{precip-downscaling,
+    author = {Maraun, D. and Wetterhall, F. and Ireson, A. M. and Chandler, R. E. and Kendon, E. J. and Widmann, M. and Brienen, S. and Rust, H. W. and Sauter, T. and Themeßl, M. and Venema, V. K. C. and Chun, K. P. and Goodess, C. M. and Jones, R. G. and Onof, C. and Vrac, M. and Thiele-Eich, I.},
+    title = {Precipitation downscaling under climate change: Recent developments to bridge the gap between dynamical models and the end user},
+    journal = {Reviews of Geophysics},
+    volume = {48},
+    number = {3},
+    keywords = {precipitation, dynamical downscaling, statistical downscaling, climate change},
+    doi = {https://doi.org/10.1029/2009RG000314},
+    year = {2010}
+}
+
+
+@misc{hclim-fennoscandinavia,
+      title={Climate change information over Fenno-Scandinavia produced with a convection-permitting climate model}, 
+      author={Petter Lind and Danijel Belušić and Erika Médus and Andreas Dobler and Rasmus A. Pedersen and Fuxing Wang and Dominic Matte and Erik Kjellström and Oskar Landgren and David Lindstedt and Ole B. Christensen and Jens H. Christensen },
+      year={2022},
+      publisher={Springer},
+      doi={https://doi.org/10.1007/s00382-022-06589-3}
+}
+
+@misc{icyalert-article,
+    title={IcyAlert: New warning system aims to predict ice-free Arctic summers},
+    year={2025},
+    author={Hanne Kokkegård},
+    url={https://www.compute.dtu.dk/newsarchive/2025/06/icyalert-new-warning-system-aims-to-predict-ice-free-arctic-summers}
+}
+
+@Article{tomasi,
+    AUTHOR = {Tomasi, E. and Franch, G. and Cristoforetti, M.},
+    TITLE = {Can AI be enabled to perform dynamical downscaling? A latent diffusion model to mimic kilometer-scale COSMO5.0\_CLM9 simulations},
+    JOURNAL = {Geoscientific Model Development},
+    VOLUME = {18},
+    YEAR = {2025},
+    NUMBER = {6},
+    PAGES = {2051--2078},
+    URL = {https://gmd.copernicus.org/articles/18/2051/2025/},
+    DOI = {10.5194/gmd-18-2051-2025}
+}
+
+@thesis{marie,
+  author = {Jørgensen, Marie Juhl and Tuxen, Jacob},
+  title = {Physics Constrained Diffusion Models for Weather Forecasting, Diffusionsmodeller med Fysiske Begrænsninger til Vejr Prognoser},
+  language = {und},
+  format = {thesis},
+  year = {2026},
+  publisher = {DTU Department of Applied Mathematics and Computer Science}
+}
+
+@article{dynamical-downscaling,
+  author = {Lopez-Gomez, Ignacio and Wan, Zhong Yi and Zepeda-Núñez, Leonardo and Schneider, Tapio and Anderson, John and Sha, Fei},
+  title = {Dynamical-generative downscaling of climate model ensembles},
+  language = {eng},
+  format = {article},
+  journal = {Proceedings of the National Academy of Sciences of the United States of America},
+  volume = {122},
+  number = {17},
+  pages = {e2420288122},
+  year = {2025},
+  issn = {10916490, 00278424},
+  publisher = {National Academy of Sciences},
+  doi = {10.1073/pnas.2420288122}
+}
+
+@article{review-ml-downscaling,
+  author = {Najafi, Hamed and Lagerwall, Gareth and Obeysekera, Jayantha and Liu, Jason},
+  title = {Machine Learning in Climate Downscaling: A Critical Review of Methodologies, Persistent Challenges, and Future Trajectories},
+  language = {und},
+  format = {article},
+  journal = {Preprints.org},
+  year = {2025},
+  doi = {10.20944/preprints202511.1538.v1}
+}
+
+@article{review-ml-downscaling-resnet,
+  author = {Nontarak, Nutcha and Simachokchai, Kittiphop and Kitratporn, Nuntikorn},
+  title = {Deep Learning—Based Spatial Downscaling of Land Surface Temperature: A Comparative Study of U-Net, ResNet, and Hybrid Models},
+  language = {eng},
+  format = {article},
+  journal = {2026 33rd International Conference on Geoinformatics (geoinformatics)},
+  pages = {1-6},
+  year = {2026},
+  publisher = {IEEE},
+  doi = {10.1109/Geoinformatics72247.2026.11665445}
+}
+
+@article{temp-downscaling-rnn,
+    author = {Chaturvedi, Manisha and Mall, Rajesh Kumar and Singh, Saumya and Chaubey, Pawan K. and Pandey, Ankur},
+    title = {Statistical downscaling of maximum temperature under CMIP6 global climate models and evaluation of heat wave events using deep learning methods for Indo-Gangetic Plain},
+    journal = {International Journal of Climatology},
+    volume = {44},
+    number = {3},
+    pages = {953-972},
+    keywords = {CMIP6, deep learning, downscaling, Indo-Gangetic Plain, temperature},
+    doi = {https://doi-org.proxy.findit.cvt.dk/10.1002/joc.8366},
+    year = {2024}
+}
+
+
+

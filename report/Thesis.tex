@@ -4,6 +4,8 @@
 \input{preamble/general}
 \input{preamble/fonts}
 \input{preamble/etc}
+\input{preamble/symbols}
+\input{preamble/glossary}
 \addbibresource{bibliography/Bibliography.bib}
 
 
@@ -21,15 +23,17 @@
 \clearforchapter
 \tableofcontents
 \clearforchapter
+\printnoidxglossaries
+\clearforchapter
 \mylistoftodos
 \mainmatter
 \include{chapters/Introduction}
-\include{chapters/LongTitle}
-\blinddocument
+\include{chapters/Background}
+\include{chapters/Methodology}
 \include{chapters/Conclusion}
 
 \appendix
-\include{appendices/AnAppendix}
+\include{appendices/derivations}
 
 \backmatter
 \printbibliography

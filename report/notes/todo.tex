@@ -8,13 +8,19 @@
     \item Look into predicting residuals of temperature instead of absolute values.
 \end{enumerate}
 
-\section*{Figure outs}
+\section*{Figure outs - ML}
 \begin{enumerate}
     \item What about non-square, non-$2^n$ sized image-targets? Interpolation? Special architecture? (Targets are 412x424, nearest $2^n$ is 512, $412/(2^3)=51.5$).
     \item What to do when epochs are 3 hours of training long? Validations happen seldom, early stopping is no good, difficult to test, etc.
     \item And what about cross-validation for hyperparameter tuning? It would take ages to do grid-search training
-    \item Does it make sense to evaluate on number of heatwaves? This is obvious from the condition data, so the model would never outperform the quality of the input.
     \item \st{Normalization on weather data. Model does not learn scale, but since scale is important for climate how do we "rescale" (un-normalize) the data?} You have to unnormalize properly....
+\end{enumerate}
+
+\section*{Figure outs - Climate}
+\begin{enumerate}
+    \item Does it make sense to evaluate on number of heatwaves? This is obvious from the condition data, so the model would never outperform the quality of the input.
+    \item How do we define heatwaves?
+    \item Other weather phenomenon I should look at, e.g. cloudbursts?
     \item \st{Should I start without precipitation?} No, include precipitation.
 \end{enumerate}
 
