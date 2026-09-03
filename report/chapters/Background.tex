@@ -1,0 +1,171 @@
+\chapter{Background}
+
+\section{Super-Resolution}
+
+
+
+\section{Diffusion Models}
+
+\cquote{Diffusion; the state of being spread out or transmitted especially by contact.}{Meriam Webster}
+Diffusion stems from the field of physics in which they describe the process of slowly spreading particles in a solution. It might a gas through the air, milk in your morning coffee, or heat from your body escaping and diffusing into the atmosphere around you. In machine learning, diffusion is used for semantic learning. It abides the fundamental engineering principle; if you understand how to destroy it, you can remake it.
+
+In a high-level view, the diffusion model iteratively destroys samples by applying noise, and learns from how that noise slowly removes all evidence of the original sample. Then through a magical reverse process it restores the sample to its original state from pure noise. Imagine that you could "unstir" the milk from your coffee, that is what the diffusion model does.
+
+The diffusion model was first introduced to the machine learning world in 2015 by Sohl-Dickstein, et. al. \cite{org-diffusion}, however in this thesis, we will be following the approach and notation of the paper "Denoising Diffusion Probabilistic Models" (\cite{ddpm}) by Ho, et. al. In the next few subsections I will summarise the mathematical definitions of the model, as well as explain a few later additions to the architecture.
+
+The section will start by introducing the forward process, where noise is added to the data to corrupt it. Then, using the variational lower bound, it will argue that training the model to estimate noise through a specific parametrization is the optimal method. Then we move on to how the model trains to estimate noise, and later how that is used to sample and create new data points.
+
+\subsection{The Forward Process}
+Before diving into the diffusion process, let's define the necessary terms.
+
+The first, and most important, term is $X_t$, which describes the data input $X$ at time-step (or iteration) $t$. As $t$ increases $X$ will become increasingly noisy, until all signal is lost. To describe that process we introduce three new terms:
+\begin{equation}
+    \beta_t, \quad \alpha_t = 1- \beta_t, \quad \bar{\alpha}_t = \prod_{s=1}^t \alpha_s
+\end{equation}
+Where $\beta_t$ is the noise scheduler, which describes the magnitude of noise added in each step. This allows us to define the "noising process" as; 
+\begin{equation} \label{eq:basic-diffusion}
+    X_t = \sqrt{1-\beta_t} X_{t-1} + \sqrt{\beta_t} \epsilon_t, \quad \epsilon_t \sim \mathcal{N}(0,I)
+\end{equation}
+Where $\epsilon_t$ describes the added Gaussian noise. Note that the noise distribution does not have to be Gaussian, but this choice will make our future derivations much easier. 
+
+Now, the avid reader might notice that following \autoref{eq:basic-diffusion} any given $X_t$ is dependent only on its predecessor $X_{t-1}$ and some random noise. One might also recognize that as a requirement for a Markov chain. Let's define the system as a stochastic process to show the resemblance to the Markov chain. We thus define $q$ as the distribution of data; $X_0 \sim q(X_0)$. Again following \autoref{eq:basic-diffusion} we can define the distribution of any $X_t$ as, $q(X_t | X_{t-1})$, which is the exact definition of the Markov chain. Excellent news.
+
+Since we can now drink the sweet nectar that is the properties of the Markov chain, \autoref{eq:basic-diffusion} can be rewritten into a more elegant version. The new version allows inference of the noisy data directly from the initial iteration (as the derivation of this step might not seem obvious to all readers, a step-by-step can be found in \autoref{ap:forward-term}, the solution stems from eq. 4 in \cite{ddpm}):
+\begin{equation} \label{eq:forward-process}
+    X_t = \sqrt{\bar{\alpha}_t}X_0+\sqrt{1-\bar{\alpha}_t} \epsilon_t, \quad \epsilon_t \sim \mathcal{N}(0,I)
+\end{equation}
+In the codebase, this equation is defined in the function \lstinline{q_sample}, which takes input data, the noise scheduler, and the time-step and returns a forward processed, "noisy", sample for the model to learn from.
+
+\subsection{The Reverse Process}
+The model has now learned to corrupt data, by slowly adding noise until nothing is left. Given enough data, the model will also learn exactly what part of a given sample is the noise. While that is an interesting skill to have, it isn't very useful to any generative process. What, in reality, is required of the model is to learn how to remove noise from data. This process is called the reverse process, or the de-noising. In a high-level sense this works by showing the model a data-point and asking: "What part of this is noise?", whatever the model answers, we subtract that part from the data-point and once again ask the model: "What part of this is noise?". Repeat this process enough times, and theoretically you will eventually have a cleaned sample. 
+
+In practice, this process involves a clever use of the Markov chain properties and Bayes theorem of conditional probabilities. For the forward process the corruption of data is modelled as: $q(X_t|X_{t-1})$. The reverse process must therefore be modelled as: $q(X_{t-1}|X_t)$. In a Bayesian sense, this is an easy problem to solve:
+\begin{equation}
+    q(X_{t-1}|X_t) = \frac{q(X_t|X_{t-1}) q(X_{t-1})}{q(X_t)}
+\end{equation}
+Where the only values needed are; the likelihood: $q(X_t|X_{t-1})$ from the forward process, the evidence: $q(X_t)$ known as the current data point, and the prior: $X_{t-1}$ which is the distribution of the data point after de-noising. The only thing to figure out is the distribution of values in the data point, which the model is trying to generate... That is too bad, as this is obviously not a known property. It means that the issue cannot be solved analytically, and instead needs an approximation. 
+
+Instead of the analytical solution, the idea is to use the trained model to estimate the distribution of noise added in each step and iteratively subtract it from the noisy data sample. Let's call the distribution of the estimated de-noised samples $\pt$ (to not confuse it with the actual distribution $q$), and model it as a Gaussian, similar to the noise added in the forward process:
+\begin{equation}
+    \pt (X_{t-1}|X_t) = \mathcal{N}(X_{t-1}| \mu(X_t,t), \Sigma(X_t, t))
+\end{equation}
+Where $\mu$ is the mean estimator and $\Sigma$ is the variance estimator.
+This reduces the issue to creating an accurate estimator for the mean and variance of added noise in each step. To take matters even further, the variance is a known hyperparameter, added in the forward process: $\Sigma(X_t,t)=\beta I$. This means that only the mean is left for us to estimate.
+
+To make matters easier down the line, the Markov chain can help simplify this term for all iterations, yielding one term for the whole process (following eq. 1 in \cite{ddpm}:
+\begin{equation}
+    \pt (X_{0:T}) = q(X_T) \prod_{t=1}^T \pt (X_{t-1}|X_t)
+\end{equation}
+The term will be needed to derive the sampling strategy.
+
+Let's borrow a trick from the world of variational auto-encoders, namely the Evidence Lower-Bound (ELBO) loss function as introduced in \cite{vae-intro} (and used in eq. 3 in \cite{ddpm}):
+\begin{equation} \label{eq:elbo}
+    -\log \pt (X_0) \leq \mathbb{E}_{q(X_{1:T}|X_0)} \left[ -\log \frac{q(X_t) \prod_{t=1}^T \pt (X_{t-1}|X_t)}{\prod_{t=1}^T q(X_t|X_{t-1})} \right] =: \mathcal{L}
+\end{equation}
+Using the derivations found in \autoref{ap:elbo} (and in \cite{ddpm}) the right-hand-side term can be split into three; $L_T$: describing the loss of the forward process, $L_{1:T-1}$: describing the loss of the reverse process, and $L_0$: describing the prior loss.
+\begin{equation} \label{eq:dl-convergence}
+    \mathbb{E}_{q(X_{1:T}|X_0)} 
+    \left[ 
+        \underbrace{ D_{KL} ( (q(X_T|X_0) || q(X_T)) }_{L_T} +
+        \sum_{t>1} \underbrace{ D_{KL} ( q(X_{t-1} | X_t, X_0) || \pt(X_{t-1}|X_t) ) }_{L_{t-1}} -
+        \underbrace{ \log \pt (X_0|X_1) }_{L_0}
+    \right]
+\end{equation}
+It is readily seen that the $L_T$ only relates to the process of adding noise, and thus wont be needed to evaluate the de-noising model. The $L_0$ term will be impossible to evaluate during training, as it exclusively relates to the last terms of the de-noising process. Thus, the focus will be on the $L_{t-1}$ term, which describes the error between the added noise and the predicted noise in each step $t$.
+\begin{equation}
+    L_{t-1} = D_{KL} ( q(X_{t-1} | X_t, X_0) || \pt(X_{t-1}|X_t) )
+\end{equation}
+For this divergence calculation two probabilities are needed; the likelihood $\pt(X_{t-1}|X_t)$, which is known from the forward process, and the posterior term $q(X_{t-1} | X_t, X_0)$, which we will have to derive.
+
+Using Bayes theorem the posterior can be split into three terms:
+\begin{equation} \label{eq:bayes-diffusion-denoising}
+    q(X_{t-1}|X_{t}, X_0) = \frac{q(X_{t-1}|X_0)q(X_t|X_{t-1},X_0)}{q(X_t|X_0)}
+\end{equation}
+All terms of \cref{eq:bayes-diffusion-denoising} are and can be formalized using the \autoref{eq:basic-diffusion} and \autoref{ap:forward-term} formulations:
+\begin{align}
+    q(X_t|X_0) =& \mathcal{N}(X_t| \sqrt{\bar{\alpha}}X_0, (1-\bar{\alpha})\mathbf{I}) \\
+    q(X_{t-1}|X_0) =& \mathcal{N}(X_{t-1}| \sqrt{\bar{\alpha}_{t-1}}X_0, (1-\bar{\alpha}_{t-1})\mathbf{I})\\
+    q(X_t|X_{t-1},X_0) =& \mathcal{N}(X_t| \sqrt{1-\beta_t}X_{t-1}, \beta_t \mathbf{I})
+\end{align}
+
+Which finally allows us to determine the parameters of the estimated distribution as:
+\begin{equation} \label{eq:forward-process-distribution}
+    q(X_{t-1}|X_{t}, X_0) = \mathcal{N}(X_{t-1}| \tilde{\mu}_t(X_t, X_0), \tilde{\beta}_t \mathbf{I})
+\end{equation}
+Where:
+\begin{equation*} \label{eq:estimated-mean}
+    \tilde{\mu}_t(X_t, X_0) = \frac{\sqrt{\bar{\alpha}_{t-1}}\beta_t}{1-\bar{\alpha}_t}X_0 + \frac{\sqrt{\alpha_t}(1-\bar{\alpha}_{t-1})}{1-\bar{\alpha}_t}X_t, \quad \tilde{\beta}_t = \frac{1-\bar{\alpha}_{t-1}}{1-\bar{\alpha}_t}\beta_t
+\end{equation*}
+Again we run in to the issue of not knowing $X_0$. In fact, that is the whole issue, this model is trying to solve. Inevitably $X_0$ has to be replaced by a model estimate. We could try to simply replace the $X_0$ with a model estimate of the data point, $\hat{X}_0$, but according to \cite{ddpm}, that is not the right approach. Instead we make a choice to parametrize the model in terms of the unwanted noise rather than the desired data point. It is much easier to model the noise, as the distribution is known. It leaves the following term, which describes a deterministic sampling process for the diffusion model (see full derivation in \autoref{ap:backward-term}).
+\begin{equation} \label{eq:diffusion-mean}
+    \tilde{\mu}_t(X_t, X_0) = \frac{1}{\sqrt{\alpha_t}} \left( X_t - \frac{\beta_t}{\sqrt{1-\bar{\alpha}_t}} \epsilon_{\theta}(X_t,t) \right)
+\end{equation}
+This model is tractable, and can be estimated by the model with good precision (\cite{ddpm}). It is derived directly from the variational lower bound (ELBO), meaning it describes the best possible estimation of the data, even though the model in reality is estimating noise and not data. And, as also stated in \cite{ddpm}, the following function can be used as a loss-function:
+\begin{equation}
+    \mathcal{L} = ||\tilde{\mu}_t(X_t, X_0) - \mu_{\theta}(X_t, t)||^2
+\end{equation}
+Where $\mu_{\theta}$ is a model estimate of $\tilde{\mu}_t$. This is the Mean Squared Error function, and it will be used in the training scheme.
+
+\subsection{Training}
+In a surprising turn of events, this is everything needed to understand a diffusion model. Remember the argumentation for \autoref{eq:diffusion-mean}, the goal of training the diffusion model is to learn, what part of the data is noise. Using \autoref{eq:forward-process} it is possible to draw a data point with $t$ iterations worth of noise added. Since the data is artificially made, the exact, ground truth, noise added is known. This yields the following training algorithm (also seen in \cite{ddpm}):
+\begin{algorithm}
+\caption{Training} \label{alg:training}
+\begin{algorithmic}[1]
+    \Statex \textbf{Repeat} until convergence of $\nabla_{\theta}$
+    \State $X_0 \sim q(X_0)$
+    \State $t \sim \text{Uniform}(\{1, \dots, T\})$
+    \State $\epsilon_t \sim \mathcal{N}(0, I)$
+    \State $X_t = \sqrt{\bar{\alpha}_t}X_0+\sqrt{1-\bar{\alpha}_t} \epsilon_t$
+    \State $\epsilon_{\theta} \sim f(X_t, t)$ \Comment{Where $f$ represents the trainable model}
+    \State Take gradient step on: $\nabla_{\theta} || \epsilon - \epsilon_{\theta}||^2$ \Comment{Notice the MSE-loss form}
+\end{algorithmic}
+\end{algorithm}
+
+It is quite simple and elegant. The model only sees different levels of noise laid on the training data. During training the model wont try to remove noise, or sample image, it only models the noise added to create an understanding of what a clear image is.
+
+\subsection{Sampling} \label{sec:sampling}
+Sampling from the diffusion model is slightly more complicated than training. Here, the goal is to generate noise-free data points from a pure-noise starting point. To do so, we go back to \autoref{eq:diffusion-mean}. Let's use this term to iteratively reduce the noise in the pure-noise starting point. However, we might consider adding a term to the function. With the current formulation we sample from the learned latent-space noise-distribution at each step and subtract that from the current data point. Essentially, the model learns a full latent-space distribution, but only ever samples one point. If we instead sampled different points of that distribution, the model would go from a deterministic sampling to a stochastic one, which allows for creating slightly different samples in each step. Following the approach in \cite{ddpm}, we add a random term to the end of the sampling to push each sample sightly in the latent space, leaving us with the following formulation:
+\begin{equation} \label{eq:sample}
+    X_{t-1} = \frac{1}{\sqrt{\alpha_t}} \left( X_t - \frac{\beta_t}{\sqrt{1-\bar{\alpha}_t}} \epsilon_{\theta}(X_t,t) \right) + \sigma_t Z
+\end{equation}
+Where $Z \sim \mathcal{N}(0,I)$. Which brings us to the following sampling algorithm:
+\begin{algorithm}
+\caption{Sampling} \label{alg:base-sample}
+\begin{algorithmic}[1]
+    \State $X_t \sim \mathcal{N}(0,I)$
+    \For{$t=T,\dots,0$}
+        \State $ Z \sim \mathcal{N}(0,I) $
+        \State $ X_{t-1} = \frac{1}{\sqrt{\alpha_t}} \left( X_t - \frac{\beta_t}{\sqrt{1-\alpha_t}} \epsilon_{\theta}(X_t,t) \right) + \sigma_t Z $
+    \EndFor
+    \State \Return{ $X_0$ }
+\end{algorithmic}
+\end{algorithm}
+Which is also seen in \cite{ddpm}. It describes the most basic version of stochastic diffusion sampling and creates a basis for adding more advances techniques.
+
+\subsubsection{Guided sampling}
+
+In \cite{org-diffusion} Sohl-Dickstein describes a method to "guide" the diffusion process, similar to that of guided GAN-models \cite{gan}. Here, a classifier is trained, separately to the main model (GAN or diffusion), in the sampling process, the gradients of the classifier will "pull" the main sampler in the direction of the class, resulting in an output more similar to the general latent space representation of the class.
+
+Building on that Ho, et. al. (again) introduces a "classifier-free guidance" technique, in which the same principal is used, only here there is no need to train a separate model. Instead the diffusion model is trained by sometimes adding the conditioning, and sometimes not. When sampling the model uses a weighted average between in non-conditioned, and the conditioned model output to determine the correct noise-prediction. N.B. the conditioning does not have to be a similar input to that referred to in \autoref{sec:conditioning}.
+
+Both methods are somewhat limiting, classifier guidance is limiting to a one-hot encoded class label, while classifier-free guidance limits by requiring a retraining of the model for each guidance strategy. To circumvent those restrictions, Bansal, et. al. \cite{universal-guidance} proposes "Universal guidance", similar to classifier guidance. Here, the gradients of any model can be used to guide the diffusion process toward a desired sample. In \cite{universal-guidance} the process is described as follows.
+
+We define a model, $f$, with loss function, $l$, and condition/class $c$. To find the correct gradient, we find:
+\begin{equation}
+    \Delta_{X_t} = \text{arg} \min_{\Delta} l(c, f(\hat{X}_0+\Delta))
+\end{equation}
+Where $\hat{X}_0$ is the predicted sample of $X_0$ and $\Delta$ is the gradient. (Note the difference in notation from the original paper, making the expression more clear). When found, the gradient can be applied to the data point at timestep $t$ by stepping forward, like \autoref{eq:forward-process}:
+\begin{equation}
+    X_t = \sqrt{\bar{\alpha}_t}(\hat{X}_0 + \Delta_{X_t}) + \sqrt{1-\bar{\alpha}_t} \epsilon_{\theta}(X_t,t)
+\end{equation}
+Which allows the augmented reverse step to be formulated as:
+\begin{equation}
+    \tilde{\epsilon}_{\theta} (X_t, X_0) = \epsilon_{\theta}(X_t,t) - \sqrt{\bar{\alpha}_t / (1 - \bar{\alpha}_t)}\Delta_{X_t}
+\end{equation}
+Replace $\epsilon_{\theta}$ with $\tilde{\epsilon}_{\theta}$ in \autoref{eq:sample} and you have a sampling scheme build to inference-time guidance with no re-training needed.
+
+\subsubsection{Ensemble sampling}
+
+An important part of the sampling process of the DDPM is the extra noise added (see $Z$ in \autoref{eq:sample}). This noise is responsible for moving the drawn sample ever so slightly in the latent space. It makes sure, that samples are not drawn from the same spot in the representation. This is where the "Probabilistic" part of the name comes from, as each drawn sample is unique \cite{ddpm}. 
+
+From a machine learning perspective, this is a marvellous trait. It allows the model to generate several estimations of the same system, drawn from the same distribution. So even though the diffusion model isn't inherently probabilistic model, the parametrization can be estimated with the Monte Carlo method.
