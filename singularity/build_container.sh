@@ -19,5 +19,5 @@ srun \
 	export MPLCONFIGDIR="/tmp/$USER/mpl"
 
 	cd ~/Desktop/sirius
-	singularity build singularity/docker.sif singularity/docker.def
+	singularity build /scratch/project_465002687/ec_earth/containers/docker.sif singularity/docker.def
     '

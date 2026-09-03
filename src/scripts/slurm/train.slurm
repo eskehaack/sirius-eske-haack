@@ -49,7 +49,7 @@ amd-smi version
 # --------------------------------------------------
 
 cd "/users/haackesk/Desktop/sirius/"
-SIF="/users/haackesk/Desktop/sirius/singularity/docker.sif"
+SIF="/scratch/project_465002687/ec_earth/containers/docker.sif"
 
 srun --account=project_465002687 singularity exec \
     --bind /scratch/project_465002687/ec_earth:/scratch/project_465002687/ec_earth \
