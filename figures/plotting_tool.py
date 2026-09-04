@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import xarray as xr
 import cartopy.crs as ccrs
 
-dpath = "/scratch/project_465002687/ec_earth/predictors/EC-Earth3-Veg/historical/r1i1p1f1"
+dpath = "/scratch/project_465002687/ec_earth/predictors/EC-Earth3-Veg-v2/historical/r1i1p1f1"
 HISTORICAL = Path(dpath)
 
 FIGSIZE = (8, 6)
