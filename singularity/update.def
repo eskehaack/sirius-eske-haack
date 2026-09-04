@@ -1,0 +1,20 @@
+Bootstrap: localimage
+From: /scratch/project_465002687/ec_earth/containers/docker.sif
+
+%post
+    set -eux
+
+    . /opt/venv/bin/activate
+
+    python -m pip install --no-cache-dir \
+        pyresample
+
+    python -m pip check
+
+%test
+    . /opt/venv/bin/activate
+
+    python -c "import torch; print('PyTorch:', torch.__version__)"
+    python -c "import torchvision; print('TorchVision:', torchvision.__version__)"
+    python -c "import lightning; print('Lightning:', lightning.__version__)"
+    python -c "import pyresample; print('pyresample:', pyresample.__version__)"
