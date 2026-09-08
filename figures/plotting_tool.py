@@ -9,7 +9,7 @@ dpath = "/scratch/project_465002687/ec_earth/predictors/EC-Earth3-Veg-v2/histori
 HISTORICAL = Path(dpath)
 
 FIGSIZE = (8, 6)
-COLORS = ["cornflowerblue", "orangered", "violet"]
+COLORS = ["cornflowerblue", "orangered", "violet", "black", "gold"]
 
 def precip_distribution():
     """
@@ -187,7 +187,54 @@ def plot_domain():
 
     plt.close()
 
+def plot_timeseries(x='tas'):
+    """
+    Plots a time series of variable X for historical+scenario EC Earth data.
+    """
+
+    base_path = Path("/scratch/project_465002687/ec_earth/predictors/EC-Earth3-Veg-v2")
+    historical_path = base_path / "historical" / "r1i1p1f1/tas_EUR-12_day_EC-Earth3-Veg_historical_r1i1p1f1_r360x180_1951-2014.nc"
+    ssp126_path = base_path / "ssp126" / "r1i1p1f1/tas_EUR-12_day_EC-Earth3-Veg_ssp126_r1i1p1f1_r360x180_2015-2100.nc"
+    ssp370_path = base_path / "ssp370" / "r1i1p1f1/tas_EUR-12_day_EC-Earth3-Veg_ssp370_r1i1p1f1_r360x180_2015-2100.nc"
+
+    paths = [historical_path, ssp126_path, ssp370_path]
+
+    fig = plt.figure(figsize=FIGSIZE)
+
+    running_mean_window = 365 # days
+
+    for i, path in enumerate(paths):
+        if not path.exists():
+            raise FileNotFoundError(f"File {path} does not exist.")
+
+        name = path.parent.parent.name
+
+        with xr.open_dataset(path) as data:
+            if "historical" in name:
+                data = data.sel(time=slice("1951-01-01", "2014-12-31"))
+            elif "ssp" in name:
+                data = data.sel(time=slice("2015-01-01", "2100-12-31"))
+
+            var = data[x]
+            var_mean = var.mean(dim=["lat", "lon"])
+            var_std = var.std(dim=["lat", "lon"])
+            time = data.time.values
+
+            plt.plot(time, var_mean, color=COLORS[i], label=name)
+            plt.fill_between(time, var_mean - var_std, var_mean + var_std, alpha=0.2, color=COLORS[i])
+
+            # run_mean = var_mean.rolling(time=running_mean_window, center=True).mean()
+            # plt.plot(run_mean.time, run_mean, color=COLORS[i], linestyle="--", label=f"{running_mean_window}-day Running Mean")
+
+    plt.xlabel("Time")
+    plt.ylabel(f"{x} (mean)")
+    plt.title(f"Time Series of {x}")
+    plt.legend()
+    plt.savefig(f"./figures/timeseries_{x}.png", dpi=300, transparent=False, bbox_inches="tight")
+    plt.close()
+
 if __name__ == "__main__":
     # precip_distribution()
     # plot_temp_hclim()
-    plot_domain()
+    plot_timeseries()
+    # plot_domain()
