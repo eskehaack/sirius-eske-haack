@@ -55,12 +55,26 @@ def plot_domain():
     Shows the domain of the two datasets.
     """
 
-    ec_earth_path = HISTORICAL / "tas_EUR-12_day_EC-Earth3-Veg_historical_r1i1p1f1_r360x180_1951-2014.nc"
-    hclim_path = Path("/scratch/project_465002687/ec_earth/targets/HCLIM/EC-Earth3-Veg/historical/r1i1p1f1/day/tas/tas_EUR-12_EC-Earth3-Veg_historical_r1i1p1f1_HCLIMcom-SMHI_HCLIM43-ALADIN_v1-r1_day_19510101-19551231.nc")
+    ec_earth_path = (
+        HISTORICAL
+        / "tas_EUR-12_day_EC-Earth3-Veg_historical_r1i1p1f1_r360x180_1951-2014.nc"
+    )
 
-    labels = ["EC-Earth Temperature Data", "HCLIM Temperature Data"]
+    hclim_path = Path(
+        "/scratch/project_465002687/ec_earth/targets/HCLIM/"
+        "EC-Earth3-Veg/historical/r1i1p1f1/day/tas/"
+        "tas_EUR-12_EC-Earth3-Veg_historical_r1i1p1f1_"
+        "HCLIMcom-SMHI_HCLIM43-ALADIN_v1-r1_day_"
+        "19510101-19551231.nc"
+    )
 
+    paths = [ec_earth_path, hclim_path]
+    labels = ["EC-Earth", "HCLIM"]
+
+    # ---------------------------------------------------------
     # Create globe
+    # ---------------------------------------------------------
+
     fig = plt.figure(figsize=FIGSIZE)
 
     ax = plt.axes(
@@ -68,46 +82,101 @@ def plot_domain():
     )
 
     ax.set_global()
-    ax.coastlines()
 
-    for i, data_path in enumerate([ec_earth_path, hclim_path]):
+    # Coastlines
+    ax.coastlines(
+        linewidth=0.8,
+        color="gray",
+    )
+
+    # ---------------------------------------------------------
+    # Plot domain boundaries
+    # ---------------------------------------------------------
+
+    for i, data_path in enumerate(paths):
+
         if not data_path.exists():
-            raise FileNotFoundError(f"File {data_path} does not exist.")
-        
-        data = xr.open_dataset(data_path)
-        tas = data.tas
+            raise FileNotFoundError(
+                f"File {data_path} does not exist."
+            )
 
-        # Get latitude and longitude coordinates
-        lon = tas.lon.values
-        lat = tas.lat.values
-        if lon.ndim == 1:
-            lon = np.tile(lon, (lat.shape[0], 1))
-        if lat.ndim == 1:
-            lat = np.tile(lat, (lon.shape[1], 1)).T
+        with xr.open_dataset(data_path) as data:
 
-        lon_edges = np.empty((2*lon.shape[0]+2*lon.shape[1]))
-        lat_edges = np.empty((2*lat.shape[0]+2*lat.shape[1]))
+            tas = data.tas
 
-        for source, target in [(lat, lat_edges), (lon, lon_edges)]:
-            idx = 0
+            lon = tas.lon.values
+            lat = tas.lat.values
 
-            for j in [0,-1]:
-                edge = source[j,:]
-                start = idx
-                idx += edge.shape[0]
-                target[start:idx] = edge
+            # Convert 1D coordinates to 2D
+            if lon.ndim == 1:
+                lon = np.tile(lon, (lat.shape[0], 1))
 
-                edge = source[:,j]
-                start = idx
-                idx += edge.shape[0]
-                target[start:idx] = edge
+            if lat.ndim == 1:
+                lat = np.tile(lat, (lon.shape[1], 1)).T
 
-        ax.scatter(lon_edges, lat_edges, s=1, color=COLORS[i], label=labels[i], transform=ccrs.PlateCarree())
+            # -------------------------------------------------
+            # Construct boundary in a continuous order
+            #
+            #        top:  ---> 
+            #              |
+            #              |
+            #        bottom: <---
+            # -------------------------------------------------
 
+            top_lon = lon[0, :]
+            top_lat = lat[0, :]
 
-    ax.legend()
+            right_lon = lon[:, -1]
+            right_lat = lat[:, -1]
 
-    plt.title("Domain of Datasets")
+            bottom_lon = lon[-1, ::-1]
+            bottom_lat = lat[-1, ::-1]
+
+            left_lon = lon[::-1, 0]
+            left_lat = lat[::-1, 0]
+
+            # Join all four edges
+            boundary_lon = np.concatenate([
+                top_lon,
+                right_lon,
+                bottom_lon,
+                left_lon,
+            ])
+
+            boundary_lat = np.concatenate([
+                top_lat,
+                right_lat,
+                bottom_lat,
+                left_lat,
+            ])
+
+            # Plot continuous boundary
+            ax.plot(
+                boundary_lon,
+                boundary_lat,
+                transform=ccrs.PlateCarree(),
+                color=COLORS[i],
+                linewidth=2.5,
+                label=labels[i],
+            )
+
+    # ---------------------------------------------------------
+    # Legend
+    # ---------------------------------------------------------
+
+    ax.legend(
+        loc="upper center",
+        bbox_to_anchor=(0.5, -0.05),
+        ncol=2,
+        frameon=False,
+        fontsize=12,
+    )
+
+    plt.title(
+        "Model Domains",
+        fontsize=16,
+        pad=15,
+    )
 
     plt.savefig(
         "./figures/domains.png",
