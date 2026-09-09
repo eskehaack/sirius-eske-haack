@@ -1,12 +1,15 @@
+from os import name
 from pathlib import Path
 
 import numpy as np
 import matplotlib.pyplot as plt
 import xarray as xr
 import cartopy.crs as ccrs
+import xclim
 
 dpath = "/scratch/project_465002687/ec_earth/predictors/EC-Earth3-Veg-v2/historical/r1i1p1f1"
 HISTORICAL = Path(dpath)
+TRANSPARENT = True
 
 FIGSIZE = (8, 6)
 COLORS = ["cornflowerblue", "orangered", "violet", "black", "gold"]
@@ -25,7 +28,7 @@ def precip_distribution():
     plt.ylabel("Number of Days [Log Scale]")
     plt.xlabel("Precipitation [kg/m²/day]")
     plt.title("Distribution of Precipitation Amount on Days for historical EC Earth data")
-    plt.savefig("./figures/precip_distribution.png", dpi=300, transparent=True)
+    plt.savefig("./figures/precip_distribution.png", dpi=300, transparent=TRANSPARENT)
     plt.close()
 
 
@@ -46,7 +49,7 @@ def plot_temp_hclim():
     p.axes.set_global()
     p.axes.coastlines()
     plt.title("Domain of Temperature Data for historical EC Earth data")
-    plt.savefig("./figures/hclim_tas.png", dpi=300, transparent=True)
+    plt.savefig("./figures/data_section/hclim_tas.png", dpi=300, transparent=TRANSPARENT)
     plt.close()
 
 
@@ -179,9 +182,9 @@ def plot_domain():
     )
 
     plt.savefig(
-        "./figures/domains.png",
+        "./figures/data_section/domains.png",
         dpi=300,
-        transparent=True,
+        transparent=TRANSPARENT,
         bbox_inches="tight",
     )
 
@@ -192,49 +195,187 @@ def plot_timeseries(x='tas'):
     Plots a time series of variable X for historical+scenario EC Earth data.
     """
 
-    base_path = Path("/scratch/project_465002687/ec_earth/predictors/EC-Earth3-Veg-v2")
-    historical_path = base_path / "historical" / "r1i1p1f1/tas_EUR-12_day_EC-Earth3-Veg_historical_r1i1p1f1_r360x180_1951-2014.nc"
-    ssp126_path = base_path / "ssp126" / "r1i1p1f1/tas_EUR-12_day_EC-Earth3-Veg_ssp126_r1i1p1f1_r360x180_2015-2100.nc"
-    ssp370_path = base_path / "ssp370" / "r1i1p1f1/tas_EUR-12_day_EC-Earth3-Veg_ssp370_r1i1p1f1_r360x180_2015-2100.nc"
+    fig = plt.figure(figsize=FIGSIZE)
+    running_mean_window = 3 * 365 # days
+    transparency = [1, 0.7, 1]
 
-    paths = [historical_path, ssp126_path, ssp370_path]
+    for i in range(3):
+        realization = f"r{i+1}i1p1f1"
+        base_path = Path("/scratch/project_465002687/ec_earth/predictors/EC-Earth3-Veg-v2")
+        historical_path = base_path / "historical" / realization / f"{x}_EUR-12_day_EC-Earth3-Veg_historical_{realization}_r360x180_1951-2014.nc"
+        ssp126_path = base_path / "ssp126" / realization / f"{x}_EUR-12_day_EC-Earth3-Veg_ssp126_{realization}_r360x180_2015-2100.nc"
+        ssp370_path = base_path / "ssp370" / realization / f"{x}_EUR-12_day_EC-Earth3-Veg_ssp370_{realization}_r360x180_2015-2100.nc"
 
+        paths = [historical_path, ssp126_path, ssp370_path]
+
+        for j, path in enumerate(paths):
+            if not path.exists():
+                raise FileNotFoundError(f"File {path} does not exist.")
+
+            name = path.parent.parent.name
+            member = path.parent.name
+
+            label = f"{member}-{x}-{running_mean_window} day running mean" if j == 0 else None
+
+            with xr.open_dataset(path) as data:
+
+                data = data.sel(time=slice("1950-01-01", "2100-12-31"))
+
+                weights = np.cos(np.deg2rad(data.lat))
+                weights.name = "weights"
+
+                var = data[x]
+                var = var.mean(dim=['lon'])
+
+                if var.shape[0] == 0:
+                    print(f"No data available for {name}-{member} in the specified time range.")
+                    continue
+
+                size_weighted = var.weighted(weights)
+                var_mean = size_weighted.mean(dim=["lat"])
+
+                run_mean = var_mean.rolling(time=running_mean_window, center=True).mean()
+                plt.plot(run_mean.time, run_mean, color=COLORS[i], label=label, alpha=transparency[j])
+
+    xpoint = data.time[0] if not name == "historical" else data.time[-1] 
+    plt.vlines(x=xpoint, ymin=282.5, ymax=292.5, color="black", linestyle="--", alpha=0.2, label="End of Historical Period")
+    plt.grid(axis="y", alpha=0.2)
+    plt.xlabel("Time")
+    plt.ylabel(f"{x} (Kelvin)")
+    plt.title(f"Time Series of {x} on EC-Earth data - all members and scenarios")
+    plt.legend()
+    plt.savefig(f"./figures/data_section/climatology/timeseries_{x}.png", dpi=300, transparent=TRANSPARENT, bbox_inches="tight")
+    plt.close()
+
+class dataFile:
+    def __init__(self, path, member, dataset, time_range, name):
+        self.path = path
+        self.member = member
+        self.dataset = dataset
+        self.time_range = time_range
+        self.name = name
+
+class biasData:
+    def __init__(self, x='tas'):
+        base_path = Path("/scratch/project_465002687/ec_earth/predictors/EC-Earth3-Veg-v2")
+        historical_path = lambda i: base_path / "historical" / f"r{i}i1p1f1/{x}_EUR-12_day_EC-Earth3-Veg_historical_r{i}i1p1f1_r360x180_1951-2014.nc"
+        ssp370_path = lambda i: base_path / "ssp370" / f"r{i}i1p1f1/{x}_EUR-12_day_EC-Earth3-Veg_ssp370_r{i}i1p1f1_r360x180_2015-2100.nc"
+        self.n_members = 3
+
+        self.files = [
+            dataFile(
+                path=historical_path,
+                member=historical_path(0).parent.name,
+                dataset=historical_path(0).parent.parent.name,
+                time_range=slice("1985-01-01", "2014-12-31"),
+                name="Historical (1985-2014)"
+            ),
+            dataFile(
+                path=ssp370_path,
+                member=ssp370_path(0).parent.name,
+                dataset=ssp370_path(0).parent.parent.name,
+                time_range=slice("2020-01-01", "2050-12-31"),
+                name="Mid range (2020-2050)"
+            ),
+            dataFile(
+                path=ssp370_path,
+                member=ssp370_path(0).parent.name,
+                dataset=ssp370_path(0).parent.parent.name,
+                time_range=slice("2070-01-01", "2100-12-31"),
+                name="Late range (2070-2100)"
+            ),
+        ]
+
+    def _get_data(self, time_range=0):
+        file = self.files[time_range]
+        dataset = xr.open_dataset(file.path(1))
+        for i in range(1, self.n_members):
+            tmp = xr.open_dataset(file.path(i+1))
+            dataset = xr.concat([dataset, tmp], dim="member")
+
+        return dataset.sel(time=file.time_range)
+
+def plot_yearly_max_days(x='tas', title="Distribution of Warmest Days", unit="Kelvin"):
+    """
+    Plots a time series of variable X for historical+scenario EC Earth data.
+    """
+
+    dataObj = biasData(x=x)
     fig = plt.figure(figsize=FIGSIZE)
 
-    running_mean_window = 365 # days
+    for i in range(3):
+        data = dataObj._get_data(time_range=i)
+        maxes = data.groupby("time.year").max(dim=["lat", "lon", "member"])
 
-    for i, path in enumerate(paths):
-        if not path.exists():
-            raise FileNotFoundError(f"File {path} does not exist.")
+        plt.hist(maxes[x].values, bins=50, density=True, color=COLORS[i], alpha=0.5, label=f"{dataObj.files[i].name}")
 
-        name = path.parent.parent.name
-
-        with xr.open_dataset(path) as data:
-            if "historical" in name:
-                data = data.sel(time=slice("1951-01-01", "2014-12-31"))
-            elif "ssp" in name:
-                data = data.sel(time=slice("2015-01-01", "2100-12-31"))
-
-            var = data[x]
-            var_mean = var.mean(dim=["lat", "lon"])
-            var_std = var.std(dim=["lat", "lon"])
-            time = data.time.values
-
-            plt.plot(time, var_mean, color=COLORS[i], label=name)
-            plt.fill_between(time, var_mean - var_std, var_mean + var_std, alpha=0.2, color=COLORS[i])
-
-            # run_mean = var_mean.rolling(time=running_mean_window, center=True).mean()
-            # plt.plot(run_mean.time, run_mean, color=COLORS[i], linestyle="--", label=f"{running_mean_window}-day Running Mean")
-
-    plt.xlabel("Time")
-    plt.ylabel(f"{x} (mean)")
-    plt.title(f"Time Series of {x}")
+    plt.grid(axis="y", alpha=0.2)
+    plt.xlabel(f"{unit} [{x}]")
+    plt.ylabel(f"Probability")
+    plt.title(title)
     plt.legend()
-    plt.savefig(f"./figures/timeseries_{x}.png", dpi=300, transparent=False, bbox_inches="tight")
+    plt.savefig(f"./figures/data_section/climatology/max_{x}_days.png", dpi=300, transparent=TRANSPARENT, bbox_inches="tight")
     plt.close()
+
+def plot_warmest_days():
+    plot_yearly_max_days(x='tas', title="Distribution of Warmest Days on EC-Earth all members and ssp370", unit="Kelvin")
+
+def plot_wettest_days():
+    plot_yearly_max_days(x='pr', title="Distribution of Wettest Days on EC-Earth all members and ssp370", unit="kg/m²/s")
+
+def plot_hwfi_days(x='tas', title="Warm Spell Duration Index on EC-Earth all members and ssp370", unit="Days per Year"):
+    """
+    Plots the Warm Spell Duration Index (WSDI) for historical+scenario EC Earth data.
+    The 90th-percentile threshold is always derived from the reference period (time_range=0).
+    """
+    dataObj = biasData(x)
+    fig = plt.figure(figsize=FIGSIZE)
+
+    # Compute threshold once from the reference period so all three periods
+    # are evaluated against the same baseline climatology.
+    ref_data = dataObj._get_data(time_range=0)
+    per = xclim.core.calendar.percentile_doy(
+        ref_data[x], per=90, window=5,
+    )
+
+    for i in range(3):
+        data = dataObj._get_data(time_range=i)
+
+        warm_spell_days = xclim.indicators.atmos.warm_spell_duration_index(
+            tasmax=data[x],
+            tasmax_per=per,
+            window=6,
+            freq="YS",
+        )
+
+        # Spatially average to get one value per year (swap .mean for .max/.sum if preferred)
+        annual = warm_spell_days.mean(dim=["lat", "lon", "member"])
+
+        plt.hist(
+            annual.values,
+            bins=50,
+            range=(0, 365),
+            density=True,
+            color=COLORS[i],
+            label=dataObj.files[i].name,
+            alpha=0.5,
+        )
+
+    plt.grid(axis="y", alpha=0.2)
+    plt.xlabel(f"Warm spell days per year [{x}]")
+    plt.ylabel("Probability")
+    plt.title(title)
+    plt.legend()
+    plt.savefig("./figures/data_section/climatology/warm_spell_days.png", dpi=300, transparent=TRANSPARENT, bbox_inches="tight")
+    plt.close()
+
+
 
 if __name__ == "__main__":
     # precip_distribution()
     # plot_temp_hclim()
     plot_timeseries()
     # plot_domain()
+    plot_warmest_days()
+    plot_wettest_days()
+    plot_hwfi_days(x="tasmax")
