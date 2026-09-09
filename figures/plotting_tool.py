@@ -9,7 +9,7 @@ import xclim
 
 dpath = "/scratch/project_465002687/ec_earth/predictors/EC-Earth3-Veg-v2/historical/r1i1p1f1"
 HISTORICAL = Path(dpath)
-TRANSPARENT = True
+TRANSPARENT = False
 
 FIGSIZE = (8, 6)
 COLORS = ["cornflowerblue", "orangered", "violet", "black", "gold"]
@@ -369,13 +369,63 @@ def plot_hwfi_days(x='tas', title="Warm Spell Duration Index on EC-Earth all mem
     plt.savefig("./figures/data_section/climatology/warm_spell_days.png", dpi=300, transparent=TRANSPARENT, bbox_inches="tight")
     plt.close()
 
+def plot_residuals(x='tas'):
+    """
+    Plot the ressiduals between coarse (regridded) data and high res data 
+    """
 
+    regrided_path = Path(f"/scratch/project_465002687/ec_earth/predictors/regridded/historical/r1i1p1f1/{x}_EUR-12_day_EC-Earth3-Veg_historical_r1i1p1f1_r360x180_1951-2014.nc")
+    hclim_path = Path(f"/scratch/project_465002687/ec_earth/targets/HCLIM/EC-Earth3-Veg/historical/r1i1p1f1/day/{x}/{x}_EUR-12_EC-Earth3-Veg_historical_r1i1p1f1_HCLIMcom-SMHI_HCLIM43-ALADIN_v1-r1_day_19510101-19551231.nc")
+
+    regridded = xr.open_dataset(regrided_path).isel(time=0)[x]
+    hclim = xr.open_dataset(hclim_path).isel(time=0)[x]
+
+    residual = regridded - hclim
+
+    fig, axes = plt.subplots(2, 3, figsize=(FIGSIZE[0]*2, FIGSIZE[1]), width_ratios=[1, 1, 1], height_ratios=[1, 1])
+
+    # --- Regridded ---
+    im0 = axes[0, 0].imshow(regridded.values, cmap="coolwarm", origin="lower", aspect="auto")
+    axes[0, 0].set_title(f"Regridded EC-Earth {x}")
+    plt.colorbar(im0, ax=axes[0, 0], orientation="vertical", fraction=0.046, pad=0.04)
+
+    axes[1, 0].hist(regridded.values.flatten(), bins=50, color=COLORS[0], alpha=0.5, density=True)
+    axes[1, 0].set_title(f"Distribution - Regridded EC-Earth {x}")
+    axes[1, 0].set_xlabel(f"{x} [{regridded.units}]")
+    axes[1, 0].set_ylabel("Probability")
+
+    # --- HCLIM ---
+    im1 = axes[0, 1].imshow(hclim.values, cmap="coolwarm", origin="lower", aspect="auto")
+    axes[0, 1].set_title(f"HCLIM {x}")
+    plt.colorbar(im1, ax=axes[0, 1], orientation="vertical", fraction=0.046, pad=0.04)
+
+    axes[1, 1].hist(hclim.values.flatten(), bins=50, color=COLORS[1], alpha=0.5, density=True)
+    axes[1, 1].set_title(f"Distribution - HCLIM {x}")
+    axes[1, 1].set_xlabel(f"{x} [{hclim.units}]")
+    axes[1, 1].set_ylabel("Probability")
+
+    # --- Residuals ---
+    im2 = axes[0, 2].imshow(residual.values, cmap="coolwarm", origin="lower", aspect="auto")
+    axes[0, 2].set_title(f"Residuals (EC-Earth - HCLIM) {x}")
+    plt.colorbar(im2, ax=axes[0, 2], orientation="vertical", fraction=0.046, pad=0.04)
+
+    axes[1, 2].hist(residual.values.flatten(), bins=50, color=COLORS[2], alpha=0.5, density=True)
+    axes[1, 2].set_title(f"Distribution - Residuals {x}")
+    axes[1, 2].set_xlabel(f"Residuals [{residual.units}]")
+    axes[1, 2].set_ylabel("Probability")
+
+    plt.tight_layout()
+    plt.savefig(f"./figures/method/residuals_{x}.png", dpi=300, transparent=TRANSPARENT, bbox_inches="tight")
+    plt.close()
 
 if __name__ == "__main__":
     # precip_distribution()
     # plot_temp_hclim()
-    plot_timeseries()
+    # plot_timeseries()
     # plot_domain()
-    plot_warmest_days()
-    plot_wettest_days()
-    plot_hwfi_days(x="tasmax")
+    # plot_warmest_days()
+    # plot_wettest_days()
+    # plot_hwfi_days(x="tasmax")
+    plot_residuals()
+
+    pass
