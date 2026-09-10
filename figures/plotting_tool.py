@@ -434,51 +434,59 @@ def plot_residuals(x='tas'):
         pole_latitude=rp['grid_north_pole_latitude'],
     )
 
-    # Mix Cartopy axes (row 0) with regular axes (row 1) via GridSpec
-    fig = plt.figure(figsize=(FIGSIZE[0]*1.5, FIGSIZE[1]))
-    gs  = fig.add_gridspec(2, 3, height_ratios=[1, 1])
+    # Shared colour range for the two temperature maps; symmetric range for residuals
+    vmin = min(float(regridded.min()), float(hclim.min()))
+    vmax = max(float(regridded.max()), float(hclim.max()))
+    res_abs = float(abs(residual).max())
+
+    fig = plt.figure(figsize=(FIGSIZE[0]*1.5, FIGSIZE[1]*1.5), constrained_layout=True)
+    gs  = fig.add_gridspec(2, 3, height_ratios=[2, 1])
 
     map_axes  = [fig.add_subplot(gs[0, i], projection=proj) for i in range(3)]
     hist_axes = [fig.add_subplot(gs[1, i])                  for i in range(3)]
 
-    def plot_map(ax, data, title):
+    def plot_map(ax, data, title, cmap, vmin, vmax):
         im = ax.pcolormesh(
             ds_hcl['rlon'], ds_hcl['rlat'], data.values,
-            cmap="coolwarm", transform=proj
+            cmap=cmap, transform=proj, vmin=vmin, vmax=vmax,
         )
-        ax.add_feature(cfeature.COASTLINE,  linewidth=0.6, edgecolor="black")
-        ax.set_title(title)
-        ax.set_aspect('equal', adjustable='box')
+        ax.add_feature(cfeature.COASTLINE, linewidth=0.6, edgecolor="k")
+        ax.gridlines(linewidth=0.3, color="grey", alpha=0.4, linestyle="--")
+        ax.set_title(title, fontsize=10, pad=5)
         return im
 
-    im0 = plot_map(map_axes[0], regridded, f"Regridded EC-Earth {x}")
-    plt.colorbar(im0, ax=map_axes[0], orientation="vertical", fraction=0.046, pad=0.04)
+    im0 = plot_map(map_axes[0], regridded, f"EC-Earth (regridded)",       "RdBu_r", vmin, vmax)
+    im1 = plot_map(map_axes[1], hclim,     f"HCLIM",                      "RdBu_r", vmin, vmax)
+    im2 = plot_map(map_axes[2], residual,  f"Residual (EC-Earth - HCLIM)", "RdBu_r", -res_abs, res_abs)
 
-    im1 = plot_map(map_axes[1], hclim, f"HCLIM {x}")
-    plt.colorbar(im1, ax=map_axes[1], orientation="vertical", fraction=0.046, pad=0.04)
+    # One shared colorbar for the two temperature maps
+    cb_temp = fig.colorbar(im1, ax=map_axes[:2], orientation="vertical",
+                           fraction=0.018, pad=0.02, shrink=0.85)
+    cb_temp.set_label(f"{x} [{regridded.attrs.get('units', '')}]", fontsize=9)
+    cb_temp.ax.tick_params(labelsize=8)
 
-    im2 = plot_map(map_axes[2], residual, f"Residuals (EC-Earth - HCLIM) {x}")
-    plt.colorbar(im2, ax=map_axes[2], orientation="vertical", fraction=0.046, pad=0.04)
+    # Separate colorbar for residuals
+    cb_res = fig.colorbar(im2, ax=map_axes[2], orientation="vertical",
+                          fraction=0.046, pad=0.04, shrink=0.85)
+    cb_res.set_label(f"Δ{x} [{regridded.attrs.get('units', '')}]", fontsize=9)
+    cb_res.ax.tick_params(labelsize=8)
 
-    hist_axes[0].hist(regridded.values.flatten(), bins=50, color=COLORS[0], alpha=0.5, density=True)
-    hist_axes[0].set_title(f"Distribution - Regridded EC-Earth {x}")
-    hist_axes[0].set_xlabel(f"{x} [{regridded.units}]")
-    hist_axes[0].set_ylabel("Probability")
-    hist_axes[0].set_box_aspect(1)
+    def plot_hist(ax, data, color, xlabel, zero_line=False):
+        vals = data.values.flatten()
+        ax.hist(vals, bins=60, color=color, density=True, alpha=0.85, edgecolor="none")
+        if zero_line:
+            ax.axvline(0, color="k", linewidth=0.9, linestyle="--", alpha=0.7)
+        for spine in ["top", "right"]:
+            ax.spines[spine].set_visible(False)
+        ax.set_xlabel(xlabel, fontsize=9)
+        ax.set_ylabel("Density", fontsize=9)
+        ax.tick_params(labelsize=8)
 
-    hist_axes[1].hist(hclim.values.flatten(), bins=50, color=COLORS[1], alpha=0.5, density=True)
-    hist_axes[1].set_title(f"Distribution - HCLIM {x}")
-    hist_axes[1].set_xlabel(f"{x} [{hclim.units}]")
-    hist_axes[1].set_ylabel("Probability")
-    hist_axes[1].set_box_aspect(1)
+    plot_hist(hist_axes[0], regridded, COLORS[0], f"{x} [{regridded.attrs.get('units', '')}]")
+    plot_hist(hist_axes[1], hclim,     COLORS[1], f"{x} [{hclim.attrs.get('units', '')}]")
+    plot_hist(hist_axes[2], residual,  COLORS[2], f"Δ{x} [{regridded.attrs.get('units', '')}]", zero_line=True)
 
-    hist_axes[2].hist(residual.values.flatten(), bins=50, color=COLORS[2], alpha=0.5, density=True)
-    hist_axes[2].set_title(f"Distribution - Residuals {x}")
-    hist_axes[2].set_xlabel(f"Residuals [{residual.units}]")
-    hist_axes[2].set_ylabel("Probability")
-    hist_axes[2].set_box_aspect(1)
-
-    fig.suptitle(f"Visualization of model input, target, and desired output for {x}")
+    fig.suptitle(f"EC-Earth vs. HCLIM — {x}", fontsize=13, fontweight="bold")
     plt.savefig(f"./figures/method/residuals_{x}.png", dpi=300, transparent=TRANSPARENT, bbox_inches="tight")
     plt.close()
 
@@ -486,11 +494,11 @@ if __name__ == "__main__":
     # precip_distribution()
     # plot_temp_hclim()
     # plot_timeseries(x='pr')
-    plot_timeseries_merged(x='pr', running_mean_window=11)
+    # plot_timeseries_merged(x='pr', running_mean_window=11)
     # plot_domain()
     # plot_warmest_days()
     # plot_wettest_days()
     # plot_hwfi_days(x="tasmax")
-    # plot_residuals(x='pr')
+    plot_residuals(x='tas')
 
     pass
