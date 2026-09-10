@@ -5,13 +5,14 @@ import numpy as np
 import matplotlib.pyplot as plt
 import xarray as xr
 import cartopy.crs as ccrs
+import cartopy.feature as cfeature
 import xclim
 
 dpath = "/scratch/project_465002687/ec_earth/predictors/EC-Earth3-Veg-v2/historical/r1i1p1f1"
 HISTORICAL = Path(dpath)
 TRANSPARENT = False
 
-FIGSIZE = (8, 6)
+FIGSIZE = (12, 6)
 COLORS = ["cornflowerblue", "orangered", "violet", "black", "gold"]
 
 def precip_distribution():
@@ -247,6 +248,53 @@ def plot_timeseries(x='tas'):
     plt.savefig(f"./figures/data_section/climatology/timeseries_{x}.png", dpi=300, transparent=TRANSPARENT, bbox_inches="tight")
     plt.close()
 
+def plot_timeseries_merged(x='tas', running_mean_window=11):
+    """
+    Plots a time series of variable X for historical+scenario EC Earth data.
+    """
+    base_path = Path("/scratch/project_465002687/ec_earth/predictors/EC-Earth3-Veg-v2/merged")
+
+    transparency = [0.7, 1.0]
+
+    total_min = np.inf; total_max = -np.inf
+
+    for member in range(1, 4):
+
+
+        for j, scenario in enumerate(["ssp126", "ssp370"]):
+            data_path = base_path / f"{x}_historical_{scenario}_r{member}i1p1f1_yearly.nc"
+            data = xr.open_dataset(data_path)
+
+            weights = np.cos(np.deg2rad(data.lat))
+            weights.name = "weights"
+
+            var = data[x]
+            var = var.mean(dim=['lon'])
+
+            if var.shape[0] == 0:
+                print(f"No data available for {name}-{member} in the specified time range.")
+                continue
+
+            size_weighted = var.weighted(weights)
+            var_mean = size_weighted.mean(dim=["lat"])
+            run_mean = var_mean.rolling(time=running_mean_window, center=True).mean()
+
+            label = f"r{member}i1p1f1-{x}-{running_mean_window} year running mean" if j == 0 else None
+            plt.plot(run_mean.time, run_mean, color=COLORS[member-1], label=label, alpha=transparency[j])
+
+            total_min = min(total_min, run_mean.min().values)
+            total_max = max(total_max, run_mean.max().values)
+
+    plt.vlines(x=np.datetime64("2014-12-31"), ymin=total_min, ymax=total_max, color="black", linestyle="--", alpha=0.2, label="End of Historical Period")
+    plt.grid(axis="y", alpha=0.2)
+    plt.xlabel("Time")
+    plt.ylabel(f"{x} (Kelvin)")
+    plt.title(f"Time Series of {x} on EC-Earth data - all members and scenarios")
+    plt.legend()
+    plt.savefig(f"./figures/data_section/climatology/timeseries_{x}_{running_mean_window}.png", dpi=300, transparent=TRANSPARENT, bbox_inches="tight")
+    plt.close()
+    
+
 class dataFile:
     def __init__(self, path, member, dataset, time_range, name):
         self.path = path
@@ -370,62 +418,79 @@ def plot_hwfi_days(x='tas', title="Warm Spell Duration Index on EC-Earth all mem
     plt.close()
 
 def plot_residuals(x='tas'):
-    """
-    Plot the ressiduals between coarse (regridded) data and high res data 
-    """
-
-    regrided_path = Path(f"/scratch/project_465002687/ec_earth/predictors/regridded/historical/r1i1p1f1/{x}_EUR-12_day_EC-Earth3-Veg_historical_r1i1p1f1_r360x180_1951-2014.nc")
+    regridded_path = Path(f"/scratch/project_465002687/ec_earth/predictors/regridded/historical/r1i1p1f1/{x}_EUR-12_day_EC-Earth3-Veg_historical_r1i1p1f1_r360x180_1951-2014.nc")
     hclim_path = Path(f"/scratch/project_465002687/ec_earth/targets/HCLIM/EC-Earth3-Veg/historical/r1i1p1f1/day/{x}/{x}_EUR-12_EC-Earth3-Veg_historical_r1i1p1f1_HCLIMcom-SMHI_HCLIM43-ALADIN_v1-r1_day_19510101-19551231.nc")
 
-    regridded = xr.open_dataset(regrided_path).isel(time=0)[x]
-    hclim = xr.open_dataset(hclim_path).isel(time=0)[x]
+    ds_reg = xr.open_dataset(regridded_path).isel(time=0)
+    ds_hcl = xr.open_dataset(hclim_path).isel(time=0)
 
-    residual = regridded - hclim
+    regridded = ds_reg[x]
+    hclim     = ds_hcl[x]
+    residual  = regridded - hclim
 
-    fig, axes = plt.subplots(2, 3, figsize=(FIGSIZE[0]*2, FIGSIZE[1]), width_ratios=[1, 1, 1], height_ratios=[1, 1])
+    rp = ds_hcl['rotated_latitude_longitude'].attrs
+    proj = ccrs.RotatedPole(
+        pole_longitude=rp['grid_north_pole_longitude'],
+        pole_latitude=rp['grid_north_pole_latitude'],
+    )
 
-    # --- Regridded ---
-    im0 = axes[0, 0].imshow(regridded.values, cmap="coolwarm", origin="lower", aspect="auto")
-    axes[0, 0].set_title(f"Regridded EC-Earth {x}")
-    plt.colorbar(im0, ax=axes[0, 0], orientation="vertical", fraction=0.046, pad=0.04)
+    # Mix Cartopy axes (row 0) with regular axes (row 1) via GridSpec
+    fig = plt.figure(figsize=(FIGSIZE[0]*1.5, FIGSIZE[1]))
+    gs  = fig.add_gridspec(2, 3, height_ratios=[1, 1])
 
-    axes[1, 0].hist(regridded.values.flatten(), bins=50, color=COLORS[0], alpha=0.5, density=True)
-    axes[1, 0].set_title(f"Distribution - Regridded EC-Earth {x}")
-    axes[1, 0].set_xlabel(f"{x} [{regridded.units}]")
-    axes[1, 0].set_ylabel("Probability")
+    map_axes  = [fig.add_subplot(gs[0, i], projection=proj) for i in range(3)]
+    hist_axes = [fig.add_subplot(gs[1, i])                  for i in range(3)]
 
-    # --- HCLIM ---
-    im1 = axes[0, 1].imshow(hclim.values, cmap="coolwarm", origin="lower", aspect="auto")
-    axes[0, 1].set_title(f"HCLIM {x}")
-    plt.colorbar(im1, ax=axes[0, 1], orientation="vertical", fraction=0.046, pad=0.04)
+    def plot_map(ax, data, title):
+        im = ax.pcolormesh(
+            ds_hcl['rlon'], ds_hcl['rlat'], data.values,
+            cmap="coolwarm", transform=proj
+        )
+        ax.add_feature(cfeature.COASTLINE,  linewidth=0.6, edgecolor="black")
+        ax.set_title(title)
+        ax.set_aspect('equal', adjustable='box')
+        return im
 
-    axes[1, 1].hist(hclim.values.flatten(), bins=50, color=COLORS[1], alpha=0.5, density=True)
-    axes[1, 1].set_title(f"Distribution - HCLIM {x}")
-    axes[1, 1].set_xlabel(f"{x} [{hclim.units}]")
-    axes[1, 1].set_ylabel("Probability")
+    im0 = plot_map(map_axes[0], regridded, f"Regridded EC-Earth {x}")
+    plt.colorbar(im0, ax=map_axes[0], orientation="vertical", fraction=0.046, pad=0.04)
 
-    # --- Residuals ---
-    im2 = axes[0, 2].imshow(residual.values, cmap="coolwarm", origin="lower", aspect="auto")
-    axes[0, 2].set_title(f"Residuals (EC-Earth - HCLIM) {x}")
-    plt.colorbar(im2, ax=axes[0, 2], orientation="vertical", fraction=0.046, pad=0.04)
+    im1 = plot_map(map_axes[1], hclim, f"HCLIM {x}")
+    plt.colorbar(im1, ax=map_axes[1], orientation="vertical", fraction=0.046, pad=0.04)
 
-    axes[1, 2].hist(residual.values.flatten(), bins=50, color=COLORS[2], alpha=0.5, density=True)
-    axes[1, 2].set_title(f"Distribution - Residuals {x}")
-    axes[1, 2].set_xlabel(f"Residuals [{residual.units}]")
-    axes[1, 2].set_ylabel("Probability")
+    im2 = plot_map(map_axes[2], residual, f"Residuals (EC-Earth - HCLIM) {x}")
+    plt.colorbar(im2, ax=map_axes[2], orientation="vertical", fraction=0.046, pad=0.04)
 
-    plt.tight_layout()
+    hist_axes[0].hist(regridded.values.flatten(), bins=50, color=COLORS[0], alpha=0.5, density=True)
+    hist_axes[0].set_title(f"Distribution - Regridded EC-Earth {x}")
+    hist_axes[0].set_xlabel(f"{x} [{regridded.units}]")
+    hist_axes[0].set_ylabel("Probability")
+    hist_axes[0].set_box_aspect(1)
+
+    hist_axes[1].hist(hclim.values.flatten(), bins=50, color=COLORS[1], alpha=0.5, density=True)
+    hist_axes[1].set_title(f"Distribution - HCLIM {x}")
+    hist_axes[1].set_xlabel(f"{x} [{hclim.units}]")
+    hist_axes[1].set_ylabel("Probability")
+    hist_axes[1].set_box_aspect(1)
+
+    hist_axes[2].hist(residual.values.flatten(), bins=50, color=COLORS[2], alpha=0.5, density=True)
+    hist_axes[2].set_title(f"Distribution - Residuals {x}")
+    hist_axes[2].set_xlabel(f"Residuals [{residual.units}]")
+    hist_axes[2].set_ylabel("Probability")
+    hist_axes[2].set_box_aspect(1)
+
+    fig.suptitle(f"Visualization of model input, target, and desired output for {x}")
     plt.savefig(f"./figures/method/residuals_{x}.png", dpi=300, transparent=TRANSPARENT, bbox_inches="tight")
     plt.close()
 
 if __name__ == "__main__":
     # precip_distribution()
     # plot_temp_hclim()
-    # plot_timeseries()
+    # plot_timeseries(x='pr')
+    plot_timeseries_merged(x='pr', running_mean_window=11)
     # plot_domain()
     # plot_warmest_days()
     # plot_wettest_days()
     # plot_hwfi_days(x="tasmax")
-    plot_residuals()
+    # plot_residuals(x='pr')
 
     pass
