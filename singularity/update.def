@@ -7,7 +7,7 @@ From: /scratch/project_465002687/ec_earth/containers/docker.sif
     . /opt/venv/bin/activate
 
     python -m pip install --no-cache-dir \
-        pyresample
+        xclim
 
     python -m pip check
 
@@ -17,4 +17,4 @@ From: /scratch/project_465002687/ec_earth/containers/docker.sif
     python -c "import torch; print('PyTorch:', torch.__version__)"
     python -c "import torchvision; print('TorchVision:', torchvision.__version__)"
     python -c "import lightning; print('Lightning:', lightning.__version__)"
-    python -c "import pyresample; print('pyresample:', pyresample.__version__)"
+    python -c "import xclim; print('xclim:', xclim.__version__)"

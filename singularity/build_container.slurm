@@ -6,7 +6,7 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=128G
-#SBATCH --time=01:00:00
+#SBATCH --time=00:20:00
 #SBATCH --output=./hpc_outputs/%x-%j.out
 #SBATCH --error=./hpc_outputs/%x-%j.err
 
@@ -23,6 +23,9 @@ export SINGULARITY_CACHEDIR="/tmp/$USER/singularity-build"
 mkdir -p "/tmp/$USER/mpl"
 export MPLCONFIGDIR="/tmp/$USER/mpl"
 
+mkdir -p "/tmp/$USER/numba_cache"
+export NUMBA_CACHE_DIR="/tmp/$USER/numba_cache"
+
 cd ~/Desktop/sirius
 
-srun --account=project_465002687 singularity build /scratch/project_465002687/ec_earth/containers/dockerv2.sif singularity/update.def
+srun --account=project_465002687 singularity build /scratch/project_465002687/ec_earth/containers/dockerv3.sif singularity/update.def

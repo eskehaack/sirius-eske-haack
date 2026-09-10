@@ -19,7 +19,8 @@ From: docker.io/lumiaifactory/lumi-multitorch:torch-u24r70f21m50t210-20260513_12
         earthkit==1.0.0 \
         zarr==3.3.0 \
         toml==0.10.2 \
-        tensorboard==2.21.0
+        tensorboard==2.21.0 \
+        xclim==0.62.0
 
     python -m pip check
 
