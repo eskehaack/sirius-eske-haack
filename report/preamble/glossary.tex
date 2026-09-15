@@ -5,13 +5,28 @@
     description={The method of reducing distance between measurements in climate models by increasing the amount of data points}
 }
 
-\newglossaryentry{gcm}{
-    name=General Circulation Models (GCMs),
-    description={Global climate models, that estimate the climate on the entire planet on a long temporal scale. Often in a 0.5° to 1.25\textdegree resolution}
+\newglossaryentry{realisation}{
+    name=realisation,
+    description={GCMs and RCMs are typically run multiple times creating ensembles. One sample of a such ensemble is called a realisation}
 }
 
-\newglossaryentry{sdm}{
-    name=Statistical Downscaling Methods (SDMs),
-    description={Methods for \gls{downscaling}, in which data provides the general understanding (as opposed to physics). These methods are often Machine Learning based}
-}
+\newacronym
+[description={Global climate models, that estimate the climate on the entire planet on a long temporal scale. Often in a 0.5° to 1.25\textdegree resolution}]
+{gcm}{GCM}{General Circulation Model}
 
+
+\newacronym
+[description={Model created for downscaling the output General Circulation Models to a regional or local domain, usually improving specificity}]
+{rcm}{RCM}{Regional Climate Model}
+
+\newacronym
+[description={Methods for \gls{downscaling}, in which data provides the general understanding (as opposed to physics). These methods are often Machine Learning based}]
+{sdm}{SDM}{Statistical Downscaling Method}
+
+\newacronym
+[description={This is downscaling model similar to an SDM, but specifically this term covers physics-based downscaling models as opposed to the statistics-based SDM}]
+{ddm}{DDM}{Dynamical Downscaling Model}
+
+\newacronym
+[description={The best of the best. Crème de la crème. The, until now, best method or model for a specific task}]
+{sota}{SOTA}{State Of The Art}
