@@ -11,7 +11,7 @@
 
 \usepackage[pdftex]{graphicx} % Required for including pictures
 \usepackage[english]{babel} % Swedish translations
-\usepackage[pdftex,linkcolor=black,pdfborder={0 0 0}]{hyperref} % Format links for pdf
+\usepackage[xetex,linkcolor=black,pdfborder={0 0 0}]{hyperref} % Format links for pdf
 \usepackage{calc} % To reset the counter in the document after title page
 \usepackage{enumitem} % Includes lists
 
@@ -21,7 +21,7 @@
 %\usepackage{parskip}
 
 \usepackage[all]{nowidow} % Tries to remove widows
-\usepackage[protrusion=true,expansion=true]{microtype} % Improves typography, load after fontpackage is selected
+% \usepackage[protrusion=true,expansion=true]{microtype} % Improves typography, load after fontpackage is selected
 
 \usepackage{lipsum} % Used for inserting dummy 'Lorem ipsum' text into the template
 
@@ -55,6 +55,5 @@ pdfauthor = {Eske Haack}
 \include{notes/todo.tex}
 \include{notes/lumi.tex}
 \include{notes/description.tex}
-\include{notes/logbook.tex}
 \include{notes/literature.tex}
 \end{document}
