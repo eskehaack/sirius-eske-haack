@@ -1,0 +1,113 @@
+%--------------------
+% Packages
+% -------------------
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8x]{inputenc}
+\usepackage[T1]{fontenc}
+%\usepackage{gentium}
+\usepackage{mathptmx} % Use Times Font
+\usepackage{soul}
+
+
+\usepackage[pdftex]{graphicx} % Required for including pictures
+\usepackage[english]{babel} % Swedish translations
+\usepackage[xetex,linkcolor=black,pdfborder={0 0 0}]{hyperref} % Format links for pdf
+\usepackage{calc} % To reset the counter in the document after title page
+\usepackage{enumitem} % Includes lists
+
+\frenchspacing % No double spacing between sentences
+\linespread{1.2} % Set linespace
+\usepackage[a4paper, lmargin=0.1\paperwidth, rmargin=0.1\paperwidth, tmargin=0.1\paperheight, bmargin=0.1\paperheight]{geometry} %margins
+%\usepackage{parskip}
+
+\usepackage[all]{nowidow} % Tries to remove widows
+% \usepackage[protrusion=true,expansion=true]{microtype} % Improves typography, load after fontpackage is selected
+
+\usepackage{lipsum} % Used for inserting dummy 'Lorem ipsum' text into the template
+
+\usepackage{listings}
+\usepackage{tabularx}
+
+\lstdefinestyle{mystyle}{
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,         
+    breaklines=false,                                
+    keepspaces=true,                 
+    numbers=left,                    
+    numbersep=5pt,                  
+    showspaces=true,                
+}
+
+\lstset{style=mystyle}
+
+%-----------------------
+% Set pdf information and add title, fill in the fields
+%-----------------------
+\hypersetup{ 	
+pdfsubject = {},
+pdftitle = {sirius\_master\_thesis},
+pdfauthor = {Eske Haack}
+}
+
+\setlength{\parskip}{10pt}
+\setlength{\parindent}{0em}
+
+\begin{document}
+
+\section*{Master Thesis Project}
+
+\textbf{English Title}:
+Conditional Diffusion Models for Temperature and Precipitation Super-resolution over Europe
+
+\textbf{Danish Title}:
+Betingede diffusionsmodeller til superopløsning af temperatur og nedbør over Europa
+
+\small
+\textbf{Name}:
+Eske Haack (s214643) \\
+\textbf{Start date}:
+2026-09-01 \\
+\textbf{End date}:
+2027-02-01 \\
+\textbf{ECTS}:
+30 Points
+
+\normalsize
+\subsection*{Description}
+This master thesis will investigate the application of conditional Diffusion Models on spatial super-resolution. Specifically the focus will be on super-resolution of daily temperature and precipitation data over the European Domain, using low-resolution EC-Earth3-Veg climate simulations as predictors and high-resolution HCLIM simulations as targets. The downscaled fields will be evaluated for their ability to represent future climate indicators, including heave-wave-relevant temperature extremes and heavy-precipitation characteristics.
+
+The research aims to investigate if diffusion models are a viable option for temperature and precipitation super-resolution, in a climate-projection setting. Diffusion models have been chosen for their generative properties, as well as the ability to compute ensembles, and thus uncertainties, of predictions.
+In this study a series of diffusion-approaches and -architectures will be investigated to improve super-resolution performance. As well as a shorter investigation on the models transferability and across realizations. 
+
+\subsection*{Timeline}
+\begin{tabularx}{\textwidth}{lX}
+    Week 1-4 & Literature study of relevant material. The goal is to create a general understanding of the climate modelling field and an overview of the current state-of-the-art machine learning approaches for climate super-resolution. \\
+    Week 4 & \textbf{Milestone}: Hand-in of project plan. This should include a general description of the project, and an agreed list learning objectives. \\
+    Week 5-13 & Developing the diffusion model. This time period will be used to build and study the modifications made to the diffusion model. \\
+    Week 14-18 & Running experiments and evaluating results. \\
+    Week 18-20 & Post-processing results, computing climatological features to evaluate the trained model against the physics-based regional climate model \\
+    Week 20-22 & Finalize writing the report.
+\end{tabularx}
+
+\subsection*{Learning objectives}
+\subsubsection*{Specific learning objectives for this thesis}
+\begin{enumerate}
+    \item Given a conditional diffusion model, the student can explain the function of the model and identify improvements. 
+    \item Given a set of real-world data, the student can produce and analyse an appropriate machine learning model in a high-level programming language. 
+    \item Given a machine learning model, the student can analyse and evaluate model performance by designing evaluation experiments.
+\end{enumerate}
+
+\subsubsection*{General learning objectives of the MSc in Engineering at DTU}
+A graduate of the MSc programme from DTU:
+\begin{enumerate}
+    \item can identify and reflect on technical scientific issues and understand the interaction between the various components that make up an issue
+    \item can, based on a clear academic profile, apply elements of current research at an international level to develop ideas and solve problems
+    \item masters technical scientific methodologies, theories, and tools, and can take a holistic view of and delimit a complex, open issue, put it into a broader academic and societal perspective, and, on this basis, propose a variety of possible actions while considering sustainability
+    \item can develop relevant models, systems, technologies, and processes aimed at solving technological problems
+    \item can communicate and mediate research-based knowledge both orally and in writing
+    \item is familiar with and can seek out leading international research within their specialist area.
+    \item can work independently and reflect on own learning, academic development, and specialization
+    \item masters technical problem-solving at a high level through cross-disciplinary teamwork, and can work with and manage all phases of a project – including preparation of timetables, design, solution, and documentation
+\end{enumerate}
+
+\end{document}

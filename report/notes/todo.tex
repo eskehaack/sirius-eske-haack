@@ -2,8 +2,7 @@
 
 \begin{enumerate}
     \item Create parameter table (values and pressure-levels)
-    \item Time-series (do tas in one point, all scenarios and realizations, maybe variation)
-    \item Bias-table (historical: 1985-2014, mid: 2020-2050, late: 2070-2100, group into neu,wce,med european areas, \href{example}{\url{https://external-content.duckduckgo.com/iu/?u=https%3A%2F%2Fdata.longpaddock.qld.gov.au%2Fstatic%2Fimages%2Flanding_page%2FTable_Summary_compressed_cmip6.png&f=1&nofb=1&ipt=7acddb95d236417d7cdd1369fec4cb5abb627371d4fc90b1a7447b967cc2a796}})
+    \item Bias-table (historical: 1985-2014, mid: 2020-2050, late: 2070-2100, group into neu,wce,med european areas)
     \item Learning rate scheduler
     \item Look back at the ecmwf course on ML for weather
     \item Look into gamma-correction for precipitation
@@ -13,9 +12,9 @@
 
 \section*{Figure outs - ML}
 \begin{enumerate}
-    \item What about non-square, non-$2^n$ sized image-targets? Interpolation? Special architecture? (Targets are 412x424, nearest $2^n$ is 512, $412/(2^3)=51.5$).
     \item What to do when epochs are 3 hours of training long? Validations happen seldom, early stopping is no good, difficult to test, etc.
     \item And what about cross-validation for hyperparameter tuning? It would take ages to do grid-search training
+    \item \st{What about non-square, non-$2^n$ sized image-targets? Interpolation? Special architecture? (Targets are 412x424, nearest $2^n$ is 512, $412/(2^3)=51.5$).} zero-padding is better than interpolation! Use 432 size, as that has 4 possible halfings. 
     \item \st{Normalization on weather data. Model does not learn scale, but since scale is important for climate how do we "rescale" (un-normalize) the data?} You have to unnormalize properly....
 \end{enumerate}
 
@@ -29,10 +28,5 @@
 
 \section*{Decisions}
 \begin{enumerate}
-    \item To figure out how to mix training and inference data run the following configurations on a subset. 
-    \begin{itemize}
-        \item Train historical + 1 realization (both scenarios). Infer on different realization
-        \item Train on historical + 1 scenario (370) (all realizations). Infer on the other scenario (126)
-        \item Train on historical + 1 realization (both scenarios) but do intermittent validation blocks (Mikhail's setup).
-    \end{itemize}
+    \item Use realization 1 for training and validation, realization 2 and 3 for inference.
 \end{enumerate}
