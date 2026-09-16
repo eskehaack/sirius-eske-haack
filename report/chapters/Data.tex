@@ -3,15 +3,15 @@
 \section{Data structure}
 This thesis will cover a rather large (at least in the machine learning sense) climate data set. The data set covers two time periods; the "historical" period, spanning from 1951 till 2015, and the "future" data set, spanning from 2015 till 2100. In the data we find "images" of the climate, each image contains a number of \glspl{channel}, which covers one climatological variable each. One "image" spans one day, and contains aggregated data from that day (either minimum, mean, or maximum).
 
-\subsection{Climate models}
-The machine learning task in this thesis is of course \gls{downscaling}, which means that data must exist in two different resolutions. In this case, the two resolutions are populated by two different climate models. The low-resolution data is created by the EC-Earth-3 \gls{gcm}, while the high-resolution data is created by the HCLIM \gls{ddm}. 
+\subsection{Climate models} \label{sec:data-climate-model}
+The machine learning task in this thesis is of course \gls{downscaling}, which means that data must exist in two different resolutions. In this case, the two resolutions are populated by two different climate models. The low-resolution data is created by the \gls{ece} \gls{gcm}, while the high-resolution data is created by the \gls{hclim} \gls{ddm}. 
 
-Naturally, the two climate models operate on two different grid projections. While the EC-Earth-3 data is on a regular latitude-longitude grid,the HCLIM data uses a rotated polar grid. As the two projections map the Earth in wildly different manners, the EC-Earth-3 data set has to cover a much bigger area, than the HCLIM data, to make sure that it encompasses all the of the HCLIM area. The domains of the two datasets have been visualized in \autoref{fig:domains}.
+Naturally, the two climate models operate on two different grid projections. While the \gls{ece} data is on a regular latitude-longitude grid,the \gls{hclim} data uses a rotated polar grid. As the two projections map the Earth in wildly different manners, the \gls{ece} data set has to cover a much bigger area, than the \gls{hclim} data, to make sure that it encompasses all the of the \gls{hclim} area. The domains of the two datasets have been visualized in \autoref{fig:domains}.
 
-\begin{figure}
+\begin{figure}[tb]
     \centering
     \includegraphics[width=0.5\linewidth]{figures/data_section/domains.png}
-    \caption{Spatial areas of the two climate model datasets. The blue line represents the outer edge of the EC-Earth-3 (\gls{gcm}) data, and the orange-red line represents the outer edge of the HCLIM (\gls{ddm}) data}
+    \caption{Spatial areas of the two climate model datasets. The blue line represents the outer edge of the \gls{ece} (\gls{gcm}) data, and the orange-red line represents the outer edge of the \gls{hclim} (\gls{ddm}) data}
     \label{fig:domains}
 \end{figure}
 
@@ -22,10 +22,10 @@ In the future period, for both data sets, there are two \glspl{scenario}; "SSP12
 
 A visualisation  of the data structure can be found in \autoref{fig:data_structure}.
 
-\begin{figure}
+\begin{figure}[tb]
     \centering
     \includegraphics[width=0.8\linewidth]{figures/data_section/data_structure.png}
-    \caption{Data structure of the EC-Earth-3 and HCLIM data pair. It features two realisations for each of the two scenarios and the historical data. EC-Earth has a resolution of 380x180 pixels and 18 variables, while HCLIM has 424x412 and 4 variables. I amounts to a total of 499.074.007.488 pixel value climate estimates}
+    \caption{Data structure of the \gls{ece} and \gls{hclim} data pair. It features two realisations for each of the two scenarios and the historical data. EC-Earth has a resolution of 380x180 pixels and 18 variables, while \gls{hclim} has 424x412 and 4 variables. I amounts to a total of 499.074.007.488 pixel-value climate estimates}
     \label{fig:data_structure}
 \end{figure}
 
@@ -33,9 +33,9 @@ A visualisation  of the data structure can be found in \autoref{fig:data_structu
 Besides the two climate models, there are also two static features. In this sense "static" means that these features do not change over the temporal dimension. The two variables are "Orography", which describes the topography of the target area, and a "Land-Water mask" which describes the ratio of the grid point covered by water. Both features are delivered at a resolution matching the target grid.
 
 \subsection{Variables}
-As mentioned in \autoref{sec:scenarios} the EC-Earth-3 and HCLIM data has 18 and 4 variables respectively. In this case there are two types of variables, single-level variables and pressure-level variables. Single-level variables are only recorded once and typically model surface level climate like 2 meter temperature or precipitation. Pressure-level variables are recorded on several levels of the atmosphere. In this data we are working with three different pressure levels 500, 700, and 850 hPa, and on each level we see variables like pressure, humidity, etc. See \autoref{tab:variables} for full list of variables. 
+As mentioned in \autoref{sec:scenarios} the \gls{ece} and \gls{hclim} data has 18 and 4 variables respectively. In this case there are two types of variables, single-level variables and pressure-level variables. Single-level variables are only recorded once and typically model surface level climate like 2 meter temperature or precipitation. Pressure-level variables are recorded on several levels of the atmosphere. In this data we are working with three different pressure levels 500, 700, and 850 hPa, and on each level we see variables like pressure, humidity, etc. See \autoref{tab:variables} for full list of variables. 
 
-\begin{table}[] \label{tab:variables}
+\begin{table}[bt]
     \centering
     \begin{tabular}{l|l|l|l}
         \multicolumn{3}{l}{\textbf{Single-level Variables}} \\ \toprule
@@ -45,7 +45,7 @@ As mentioned in \autoref{sec:scenarios} the EC-Earth-3 and HCLIM data has 18 and
         \underline{PR}      & Precipitation                 & $\frac{kg}{m^2 s}$    & 380x180 and 424x412 \\ \midrule
         CLT                 & Cloud Area Fraction           & \%                    & 380x180 \\ \midrule
         PSL                 & Sea Level Pressure            & Pascal                & 380x180 \\ \midrule
-        \multicolumn{3}{l}{\textbf{Pressure-level Variables} (500 hPa, 700 hPa, 850 hPa} \\ \toprule
+        \multicolumn{3}{l}{\textbf{Pressure-level Variables} (500 hPa, 700 hPa, 850 hPa)} \\ \toprule
         UA                  & Eastward Wind                 & $m/s$                 & 380x180 \\ \midrule
         VA                  & Northward Wind                &  $m/s$                & 380x180 \\ \midrule
         HUS                 & Specific Humidity             & Watermass / Airmass   & 380x180 \\ \midrule
@@ -55,18 +55,31 @@ As mentioned in \autoref{sec:scenarios} the EC-Earth-3 and HCLIM data has 18 and
         SFTLF               & Sea Fraction to Land Fraction & \%                    & 424x412 \\ \midrule
     \end{tabular}
     \caption{Table of variables in dataset. Underlined variables are additionally used in as target data (albeit in a higher resolution)}
-    \label{tab:placeholder}
+    \label{tab:variables}
 \end{table}
 
 \section{Data distribution}
 In this section I will analyse the distributions and temporal developments of the data to develop an understanding of how the climate data can be modelled. This analysis is done prior to creating the model in order to best create preprocessing flows, that match the model capabilities and functions.
 
 \subsection{Time-series data}
-To start off let's have a look at the temporal development of the data. Specifically, let's model how the different \glspl{realisation} and \glspl{scenario} develop over time. This will help develop the understanding of the climate impact on temperature and precipitation through time. In the end, this will help us design the experiments and split data correctly.
+To start off let's have a look at the temporal development of the data. Specifically, let's model how the different \glspl{realisation} and \glspl{scenario} develop over time. This will help develop the understanding of the climate impact on temperature and precipitation through time. In the end, this will help us design the experiments and split data correctly. In \autoref{fig:tas-11-timeseries} we see such a visualisation.
+
+\begin{figure}[tb]
+    \centering
+    \subbottom[11-year running mean of the yearly mean temperatures over the entire EC-Earth domain (see \autoref{fig:domains}).]{
+        \includegraphics[width=.45\linewidth]{figures/data_section/climatology/timeseries_tas_11.png}
+    }
+    ~
+    \subbottom[11-year running mean of the yearly mean temperatures over the entire \gls{hclim} domain (see \autoref{fig:domains}).]{
+        \includegraphics[width=.45\linewidth]{figures/data_section/climatology/timeseries_tas_11_hclim.png}
+    }
+    \caption{11-year running mean of mean temperatures over Europe from 1951 to 2100. Colours blue, orange, and green represent realisation 1, 2, and 3 respectively. The vibrant lines show the ssp370 scenario and the faded lines show the ssp126 scenario.}
+    \label{fig:tas-11-timeseries}
+\end{figure}
+
+One of the most noticeable features of \autoref{fig:tas-11-timeseries} is the early "historical" period. There are very large internal variabilities between the different \glspl{realisation}. Varying as much as 2.5 degrees. This is due to the different initialisation states (as mentioned in \autoref{sec:data-climate-model}). \Gls{realisation} 3 might be initialised during a period with El Niño and \gls{realisation} with La Niña. However, as we move towards the "future" (starting in 2015) the variability decreases. Around 2040, we see the effects of the two different \glspl{scenario} to kick in. The ssp370 estimates accelerate in temperature rising a few degrees above that of the more climate-friendly ssp126 estimate. We also notice a difference in temperatures between the low-resolution \gls{ece} and high-resolution \gls{hclim} data. The \gls{hclim} data generally seems to be 2 degrees colder than \gls{ece} data.
 
 
-\newpage
-\includegraphics[width=1\linewidth]{figures/data_section/climatology/timeseries_tas.png}
 \newpage
 \includegraphics[width=1\linewidth]{figures/data_section/climatology/max_tas_days.png}
 \newpage
@@ -77,5 +90,3 @@ To start off let's have a look at the temporal development of the data. Specific
 \includegraphics[width=1\linewidth]{figures/data_section/climatology/warm_spell_days_line.png}
 \newpage
 \includegraphics[width=1\linewidth]{figures/method/residuals_tas.png}
-\newpage
-\includegraphics[width=1\linewidth]{figures/method/residuals_tas.pdf}
