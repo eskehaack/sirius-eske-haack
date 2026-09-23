@@ -66,8 +66,8 @@ FONT_FAMILY = "serif"
 USE_LATEX   = False          # set False if LaTeX is not installed on your machine
 
 FONT_SIZES = {
-    "title":       11,
-    "axis_label":  10,
+    "title":       18,
+    "axis_label":  12,
     "tick_label":   9,
     "legend":       9,
     "annotation":   8,

@@ -1,12 +1,14 @@
 from os import name
 from pathlib import Path
 
-import numpy as np
-import matplotlib.pyplot as plt
 import xarray as xr
+import xclim
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
-import xclim
+from scipy.stats import gaussian_kde
+import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
+import numpy as np
 
 from figures import plt_guide as pg
 
@@ -496,6 +498,171 @@ def plot_hwfi_days(x='tas', title="Warm Spell Duration Index on EC-Earth all mem
     plt.savefig("./figures/data_section/climatology/warm_spell_days.png", dpi=300, transparent=TRANSPARENT, bbox_inches="tight")
     plt.close()
 
+def summer_days_plot():
+    """
+    3-row figure:
+      Row 1: Absolute 30-year mean summer days (4 panels: mid/late x ssp126/ssp370)
+      Row 2: Anomaly vs historical baseline (same 4 panels, diverging colormap)
+      Row 3: KDE of summer days per grid point (5 curves: historical + 4 combos)
+    """
+
+    VAR = "summer_days_index_per_time_period"
+
+    # --- Load data ---
+    ds126 = xr.open_dataset("/scratch/project_465002687/ec_earth/metrics/su_hclim_r1i1p1f1_ssp126.nc")
+    ds370 = xr.open_dataset("/scratch/project_465002687/ec_earth/metrics/su_hclim_r1i1p1f1_ssp370.nc")
+
+    lat = ds126.lat.values
+    lon = ds126.lon.values
+
+    # 30-year means (time indices: 0=historical, 1=mid, 2=late)
+    hist     = ds126[VAR].isel(time=0).values / 30
+    mid_126  = ds126[VAR].isel(time=1).values / 30
+    late_126 = ds126[VAR].isel(time=2).values / 30
+    mid_370  = ds370[VAR].isel(time=1).values / 30
+    late_370 = ds370[VAR].isel(time=2).values / 30
+
+    # Anomalies vs historical
+    anom_mid_126  = mid_126  - hist
+    anom_late_126 = late_126 - hist
+    anom_mid_370  = mid_370  - hist
+    anom_late_370 = late_370 - hist
+
+    # --- Projection ---
+    lon_0    = float(ds126.lon.mean())
+    lat_0    = float(ds126.lat.mean())
+    data_crs = ccrs.PlateCarree()
+    proj = ccrs.LambertConformal(
+        central_longitude=lon_0,
+        central_latitude=lat_0,
+        standard_parallels=(35, 65)  # standard for European domains
+    )
+
+    # --- Colormaps and norms ---
+    abs_cmap = "YlOrRd"
+    abs_norm = mcolors.Normalize(vmin=0,   vmax=np.nanmax([mid_126, late_126, mid_370, late_370]))
+
+    anom_max = np.nanmax(np.abs([anom_mid_126, anom_late_126, anom_mid_370, anom_late_370]))
+    div_cmap = "YlGnBu"
+    div_norm = mcolors.Normalize(vmin=0, vmax=anom_max)
+
+    # --- Layout ---
+    fig     = plt.figure(figsize=(18, 14))
+    titles  = ["Mid SSP126\n(2020-2049)", "Late SSP126\n(2070-2099)",
+               "Mid SSP370\n(2020-2049)", "Late SSP370\n(2070-2099)"]
+    datasets     = [mid_126,       late_126,       mid_370,       late_370      ]
+    anom_datasets = [anom_mid_126, anom_late_126,  anom_mid_370,  anom_late_370 ]
+
+    # Row 1 & 2: 4 map panels each
+    axes_abs  = []
+    axes_anom = []
+    for col in range(4):
+        ax = fig.add_subplot(3, 4, col + 1, projection=proj)
+        axes_abs.append(ax)
+        ax = fig.add_subplot(3, 4, col + 5, projection=proj)
+        axes_anom.append(ax)
+
+    # Row 3: single wide hist panel
+    ax_hist = fig.add_subplot(3, 1, 3)
+
+    # --- Helper: plot one map panel ---
+    def plot_map(ax, data, norm, cmap, title):
+        im = ax.pcolormesh(lon, lat, data, transform=data_crs, cmap=cmap, norm=norm)
+        ax.add_feature(cfeature.COASTLINE, linewidth=0.8)
+        ax.add_feature(cfeature.BORDERS,   linewidth=0.5, linestyle=":")
+        ax.add_feature(cfeature.LAND,      facecolor="lightgrey", zorder=0)
+        ax.add_feature(cfeature.OCEAN,     facecolor="aliceblue", zorder=0)
+        ax.set_aspect("auto")
+        ax.set_title(title, fontsize=9)
+        return im
+
+    # --- Row 1: absolute means ---
+    for col, (data, title) in enumerate(zip(datasets, titles)):
+        im_abs = plot_map(axes_abs[col], data, abs_norm, abs_cmap, title)
+
+    fig.colorbar(
+        plt.cm.ScalarMappable(norm=abs_norm, cmap=abs_cmap),
+        ax=axes_abs, orientation="vertical", fraction=0.02, pad=0.04,
+        label="Summer days per year"
+    )
+
+    # Row labels
+    axes_abs[0].text(
+        -0.12, 0.5, "Absolute mean", transform=axes_abs[0].transAxes,
+        fontsize=10, va="center", rotation=90, fontweight="bold"
+    )
+
+    # --- Row 2: anomalies ---
+    for col, (data, title) in enumerate(zip(anom_datasets, titles)):
+        im_div = plot_map(axes_anom[col], data, div_norm, div_cmap, title)
+
+    fig.colorbar(
+        plt.cm.ScalarMappable(norm=div_norm, cmap=div_cmap),
+        ax=axes_anom, orientation="vertical", fraction=0.02, pad=0.04,
+        label="Δ Summer days vs historical"
+    )
+
+    axes_anom[0].text(
+        -0.12, 0.5, "Anomaly vs historical", transform=axes_anom[0].transAxes,
+        fontsize=10, va="center", rotation=90, fontweight="bold"
+    )
+
+    # --- Row 3: hist ---
+
+    hist_data = [
+        (hist, "Historical (1985-2014)"),
+        (mid_126, "Mid SSP126 (2020-2049)"),
+        (late_126, "Late SSP126 (2070-2099)"),
+        (mid_370, "Mid SSP370 (2020-2049)"),
+        (late_370, "Late SSP370 (2070-2099)")
+    ]
+    for data, label in hist_data:
+        flat = data.flatten()
+        ax_hist.hist(flat, bins=50, density=True, histtype="step", label=label)
+
+    ax_hist.set_xlabel("Summer days per year", fontsize=10)
+    ax_hist.set_ylabel("Log Frequency", fontsize=10)
+    ax_hist.set_title("Distribution of summer days across grid points", fontsize=10)
+    ax_hist.set_yscale("log")
+    ax_hist.legend(fontsize=9)
+    ax_hist.set_xlim(left=0)
+
+    # --- Final touches ---
+    plt.suptitle("Annual Summer Days (TASMAX > 25°C)", fontsize=13, fontweight="bold", y=0.95)
+    pg.save(fig, "./figures/data_section/climatology/summer_days.png")
+
+
+def plot_days_above_threshold_hclim(x='tasmax', threshold=25, title="Days Above Threshold on EC-Earth all members and ssp370", unit="Days per Year"):
+    """
+    Plots the yearly number of days above a given threshold for historical+scenario EC Earth data.
+    """
+    dataObj = biasData(x)
+    fig = plt.figure(figsize=FIGSIZE)
+
+    threshold += 273.15 if "tas" in x else 0  # Convert to Kelvin if temperature
+
+    for i in range(3):
+        data = dataObj._get_data(time_range=i)
+
+        days_above_threshold = (data[x] > threshold).sum(dim=["time", "lat", "lon", "member"])
+
+        plt.hist(
+            days_above_threshold.values,
+            bins=50,
+            density=True,
+            color=COLORS[i],
+            label=dataObj.files[i].name,
+            alpha=0.5,
+        )
+
+    plt.grid(axis="y", alpha=0.2)
+    plt.xlabel(f"Days above {threshold} [{x}]")
+    plt.ylabel("Probability")
+    plt.title(title)
+    plt.legend()
+    pg.save(fig, "./figures/data_section/climatology/days_above_25.png")
+    plt.close()
+
 def plot_residuals(x='tas'):
     regridded_path = Path(f"/scratch/project_465002687/ec_earth/predictors/regridded/historical/r1i1p1f1/{x}_EUR-12_day_EC-Earth3-Veg_historical_r1i1p1f1_r360x180_1951-2014.nc")
     hclim_path = Path(f"/scratch/project_465002687/ec_earth/targets/HCLIM/EC-Earth3-Veg/historical/r1i1p1f1/day/{x}/{x}_EUR-12_EC-Earth3-Veg_historical_r1i1p1f1_HCLIMcom-SMHI_HCLIM43-ALADIN_v1-r1_day_19510101-19551231.nc")
@@ -574,8 +741,9 @@ if __name__ == "__main__":
     # precip_distribution()
     # plot_temp_hclim()
     # plot_timeseries(x='pr')
-    plot_timeseries_merged(x='pr', running_mean_window=11)
-    plot_timeseries_merged_hclim(x='pr', running_mean_window=11)
+    # plot_timeseries_merged(x='pr', running_mean_window=11)
+    # plot_timeseries_merged_hclim(x='pr', running_mean_window=11)
+    summer_days_plot()
     # plot_domain()
     # plot_warmest_days()
     # plot_wettest_days()
