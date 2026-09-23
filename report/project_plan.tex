@@ -29,6 +29,8 @@
 
 \usepackage{listings}
 \usepackage{tabularx}
+\usepackage{makecell}
+\renewcommand{\cellalign}{tc}
 
 \usepackage{biblatex}
 
@@ -78,20 +80,10 @@ Eske Haack (s214643) \\
 
 \normalsize
 \subsection*{Description}
-This master thesis will investigate the application of conditional Diffusion Models on spatial super-resolution. Specifically the focus will be on super-resolution of daily temperature and precipitation data over the European Domain, using low-resolution EC-Earth3-Veg climate simulations as predictors and high-resolution HCLIM simulations as targets. The downscaled fields will be evaluated for their ability to represent future climate indicators, including heave-wave-relevant temperature extremes and heavy-precipitation characteristics.
+This master thesis will investigate the application of conditional diffusion models on spatial super-resolution. Specifically the focus will be on super-resolution of daily temperature and precipitation data over the European domain, using low-resolution EC-Earth-3 climate simulations as predictors and high-resolution HCLIM climate simulations as targets. The downscaled fields will be evaluated for their ability to represent future climate indicators, including heat wave temperature extremes and precipitation cloudburst events.
 
 The research aims to investigate if diffusion models are a viable option for temperature and precipitation super-resolution, in a climate-projection setting. Diffusion models have been chosen for their generative properties, as well as the ability to compute ensembles, and thus uncertainties, of predictions.
-In this study a series of diffusion-approaches and -architectures will be investigated to improve super-resolution performance. As well as a shorter investigation on the models transferability and across realizations. 
-
-\subsection*{Timeline}
-\begin{tabularx}{\textwidth}{lX}
-    Week 1-4 & Literature study of relevant material. The goal is to create a general understanding of the climate modelling field and an overview of the current state-of-the-art machine learning approaches for climate super-resolution. \\
-    Week 4 & \textbf{Milestone}: Hand-in of project plan. This should include a general description of the project, and an agreed list learning objectives. \\
-    Week 5-13 & Developing the diffusion model. This time period will be used to build and study the modifications made to the diffusion model. \\
-    Week 14-18 & Running experiments and evaluating results. \\
-    Week 18-20 & Post-processing results, computing climatological features to evaluate the trained model against the physics-based regional climate model \\
-    Week 20-22 & Finalize writing the report.
-\end{tabularx}
+In this study a series of diffusion-approaches and -architectures will be investigated to improve super-resolution performance. As well as an investigation on the models transferability and across other ensembles of the EC-Earth-3 / HCLIM pair. 
 
 \subsection*{Learning objectives}
 \subsubsection*{Specific learning objectives for this thesis}
@@ -99,9 +91,10 @@ In this study a series of diffusion-approaches and -architectures will be invest
     \item Given a conditional diffusion model, the student can explain the function of the model and identify improvements. 
     \item Given a set of real-world data, the student can produce and analyse an appropriate machine learning model in a high-level programming language. 
     \item Given a machine learning model, the student can analyse and evaluate model performance by designing evaluation experiments.
+    \item Given a climate data set, the student can use domain relevant methods to analyse climate events and compare this to the output of a trained machine learning model.
 \end{enumerate}
 
-\subsubsection*{General learning objectives of the MSc in Engineering at DTU}
+\subsubsection*{General learning objectives of the MSc in Engineering at the Technical University of Denmark}
 A graduate of the MSc programme from DTU:
 \begin{enumerate}
     \item can identify and reflect on technical scientific issues and understand the interaction between the various components that make up an issue
@@ -113,5 +106,19 @@ A graduate of the MSc programme from DTU:
     \item can work independently and reflect on own learning, academic development, and specialization
     \item masters technical problem-solving at a high level through cross-disciplinary teamwork, and can work with and manage all phases of a project – including preparation of timetables, design, solution, and documentation
 \end{enumerate}
+
+\newpage
+
+\subsection*{Timeline}
+\begin{tabularx}{\textwidth}{lX}
+    \makecell{Week 1-5 \\ Sep 1st - Oct 1st} & Literature study of relevant material. The goal is to create a general understanding of the climate modelling field, an overview of the current state-of-the-art machine learning approaches for climate super-resolution, and a general intuition for the field to improve the quality of produced models. \\ \hline
+    \makecell{Week 5 \\ Oct 1st} & \textbf{Milestone}: Hand-in of project plan. This should include a general description of the project, an agreed list learning objectives, and this timeline. \\ \hline
+    \makecell{Week 6-10 \\ Oct 1st - Nov 6th} & Developing the diffusion model. This time period will be used to build and study the modifications made to the diffusion model. \\ \hline
+    \makecell{Week 11 \\ Nov 9th - Nov 13th} & LUMI course at Panum \\ \hline
+    \makecell{Week 12-16 \\ Nov 16th - Dec 18th} & Running experiments and evaluating results. This will be an iterative process, as there certainly will be errors along the way. (Four weeks include buffer time for inevitable error correction). \\ \hline
+    \makecell{Week 17 - 18 \\ Dec 21st - Jan 1st} & Winter holidays. \\ \hline
+    \makecell{Week 19 \\ Jan 4th - Jan 8th} & Post-processing results, computing climatological features to evaluate the trained model against the physics-based regional climate model. \\ \hline
+    \makecell{Week 20 - 22 \\ Jan 11th - Jan 29th} & Finalize the writing of the report.
+\end{tabularx}
 
 \end{document}

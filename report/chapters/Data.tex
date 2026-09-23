@@ -52,13 +52,13 @@ As mentioned in \autoref{sec:scenarios} the \gls{ece} and \gls{hclim} data has 1
         TA                  & Air Temperature               & Kelvin                & 380x180 \\ \midrule
         \multicolumn{3}{l}{\textbf{Static variables}} \\ \toprule
         Orog                & Orography                     & m                     & 424x412 \\ \midrule
-        SFTLF               & Sea Fraction to Land Fraction & \%                    & 424x412 \\ \midrule
+        SFTLF               & Sea Fraction To Land Fraction & \%                    & 424x412 \\ \midrule
     \end{tabular}
-    \caption{Table of variables in dataset. Underlined variables are additionally used in as target data (albeit in a higher resolution)}
+    \caption{Table of variables in dataset. Underlined variables are additionally used in as target data (albeit in a higher resolution).}
     \label{tab:variables}
 \end{table}
 
-\section{Data distribution}
+\section{Data distribution} \label{sec:data-distribution}
 In this section I will analyse the distributions and temporal developments of the data to develop an understanding of how the climate data can be modelled. This analysis is done prior to creating the model in order to best create preprocessing flows, that match the model capabilities and functions.
 
 \subsection{Time-series data}
@@ -67,11 +67,11 @@ To start off let's have a look at the temporal development of the data. Specific
 \begin{figure}[tb]
     \centering
     \subbottom[11-year running mean of the yearly mean temperatures over the entire EC-Earth domain (see \autoref{fig:domains}).]{
-        \includegraphics[width=.45\linewidth]{figures/data_section/climatology/timeseries_tas_11.png}
+        \includegraphics[width=.47\linewidth]{figures/data_section/climatology/timeseries_tas_11.png}
     }
     ~
     \subbottom[11-year running mean of the yearly mean temperatures over the entire \gls{hclim} domain (see \autoref{fig:domains}).]{
-        \includegraphics[width=.45\linewidth]{figures/data_section/climatology/timeseries_tas_11_hclim.png}
+        \includegraphics[width=.47\linewidth]{figures/data_section/climatology/timeseries_tas_11_hclim.png}
     }
     \caption{11-year running mean of mean temperatures over Europe from 1951 to 2100. Colours blue, orange, and green represent realisation 1, 2, and 3 respectively. The vibrant lines show the ssp370 scenario and the faded lines show the ssp126 scenario.}
     \label{fig:tas-11-timeseries}
@@ -79,6 +79,38 @@ To start off let's have a look at the temporal development of the data. Specific
 
 One of the most noticeable features of \autoref{fig:tas-11-timeseries} is the early "historical" period. There are very large internal variabilities between the different \glspl{realisation}. Varying as much as 2.5 degrees. This is due to the different initialisation states (as mentioned in \autoref{sec:data-climate-model}). \Gls{realisation} 3 might be initialised during a period with El Niño and \gls{realisation} with La Niña. However, as we move towards the "future" (starting in 2015) the variability decreases. Around 2040, we see the effects of the two different \glspl{scenario} to kick in. The ssp370 estimates accelerate in temperature rising a few degrees above that of the more climate-friendly ssp126 estimate. We also notice a difference in temperatures between the low-resolution \gls{ece} and high-resolution \gls{hclim} data. The \gls{hclim} data generally seems to be 2 degrees colder than \gls{ece} data.
 
+Next, look at the development of the precipitation in the same time-frame. Since the distribution of the \glspl{realisation} through time will make the basis for designing the experiments it is important that conclusions made for the distribution of precipitation \glspl{realisation} are the same as those for temperature \glspl{realisation}.
+
+\begin{figure}[tb]
+    \centering
+    \subbottom[11-year running mean of the yearly mean precipitation over the entire EC-Earth domain (see \autoref{fig:domains}).]{
+        \includegraphics[width=.47\linewidth]{figures/data_section/climatology/timeseries_pr_11.png}
+    }
+    ~
+    \subbottom[11-year running mean of the yearly mean precipitation over the entire \gls{hclim} domain (see \autoref{fig:domains}).]{
+        \includegraphics[width=.47\linewidth]{figures/data_section/climatology/timeseries_pr_11_hclim.png}
+    }
+    \caption{11-year running mean of mean precipitation over Europe from 1951 to 2100. Colours blue, orange, and green represent \gls{realisation} 1, 2, and 3 respectively. The vibrant lines show the ssp370 scenario and the faded lines show the ssp126 scenario.}
+    \label{fig:pr-11-timeseries}
+\end{figure}
+
+Looking at \autoref{fig:pr-11-timeseries} it is, again, apparent that the \glspl{realisation} have large internal variation in the "historical" period. Similarly \gls{realisation} 3 is in the higher end of the distribution, while \gls{realisation} 2 is on the lower end. On the other end, the difference in the \glspl{scenario} is not as apparent from this plot. For the \gls{ece} data the ssp126 \gls{realisation} has a lower mean precipitation than the ssp370 \gls{realisation}, however for the \gls{hclim} data, there is no notable difference. Looking at the y-axis, it is noticeable that the \gls{hclim} precipitation is about 25\% higher than the \gls{ece} precipitation.
+
+\section{Data splits}
+
+ Now that the distribution of data has been analysed, it is possible to make some assumptions, which will help design data splits for the experiments. But before doing so, let's discus the purpose of the final model. It is important to design the test-split around what the model, in the end should compute. In this case, the purpose of the model is to downscale other \glspl{realisation} of the same \gls{gcm}-\gls{ddm} pair. Therefore, it is obvious to allocate entire \glspl{realisation} for testing. But how many, and which ones?
+
+ In \autoref{sec:data-distribution} we argue that the first \gls{realisation} (r1i1p1f1) has the most centred distribution of data, in respect to "r2" and "r3". "r2" and "r3" are either on the lower or higher side. It is not know, whether "r1" is centred in the total population of \glspl{realisation}, however it cannot be an extremity. "r2" and "r3" on the other hand could potentially lie at the very edge of the distribution. As a rule of thumb, in machine learning, it is not ideal to train on extremities, as it will give the model an unrealistic idea of the total population. It is however, in some cases, desired to test on extremities, as this reveals if the model is able to map all the way to the edge of the modelled distribution. We these arguments it seems obvious to use \gls{realisation} 1 for training and \gls{realisation} 2 and 3 for testing. However, this might leave you with two questions: Does this leave enough data for training? And wont this create data leakage, as \glspl{realisation} are undoubtedly correlated? 
+
+ \subsection{Is there enough data?}
+
+ Yes
+
+ \subsection{What about data leakage?}
+
+ Don't worry about it bro. Trust me.
+
+ \section{Climatology}
 
 \newpage
 \includegraphics[width=1\linewidth]{figures/data_section/climatology/max_tas_days.png}
