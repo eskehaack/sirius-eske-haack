@@ -5,6 +5,7 @@ import xarray as xr
 import xclim
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
+import regionmask
 from scipy.stats import gaussian_kde
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
@@ -415,51 +416,51 @@ def summer_days_plot():
     anom_late_370 = late_370 - hist
 
     # --- Projection ---
-    lon_0    = float(ds126.lon.mean())
-    lat_0    = float(ds126.lat.mean())
     data_crs = ccrs.PlateCarree()
-    proj = ccrs.LambertConformal(
-        central_longitude=lon_0,
-        central_latitude=lat_0,
-        standard_parallels=(35, 65)  # standard for European domains
+    rp = ds126['rotated_latitude_longitude'].attrs
+    proj = ccrs.RotatedPole(
+        pole_longitude=rp['grid_north_pole_longitude'],
+        pole_latitude=rp['grid_north_pole_latitude'],
     )
 
     # --- Colormaps and norms ---
     abs_cmap = "YlOrRd"
-    abs_norm = mcolors.Normalize(vmin=0,   vmax=np.nanmax([mid_126, late_126, mid_370, late_370]))
+    abs_norm = mcolors.Normalize(vmin=0,   vmax=366)
 
-    anom_max = np.nanmax(np.abs([anom_mid_126, anom_late_126, anom_mid_370, anom_late_370]))
-    div_cmap = "YlGnBu"
-    div_norm = mcolors.Normalize(vmin=0, vmax=anom_max)
+    div_cmap = "magma_r"
+    div_norm = mcolors.Normalize(vmin=0, vmax=120)
 
     # --- Layout ---
-    fig     = plt.figure(figsize=(18, 14))
     titles  = ["Mid SSP126\n(2020-2049)", "Late SSP126\n(2070-2099)",
                "Mid SSP370\n(2020-2049)", "Late SSP370\n(2070-2099)"]
     datasets     = [mid_126,       late_126,       mid_370,       late_370      ]
     anom_datasets = [anom_mid_126, anom_late_126,  anom_mid_370,  anom_late_370 ]
 
+    fig     = plt.figure(figsize=(18,14), layout="constrained")
+    subfigs = fig.subfigures(2,1, height_ratios=[4.0, 1.5])
+
     # Row 1 & 2: 4 map panels each
     axes_abs  = []
     axes_anom = []
     for col in range(4):
-        ax = fig.add_subplot(3, 4, col + 1, projection=proj)
+        ax = subfigs[0].add_subplot(2, 4, col + 1, projection=proj)
         axes_abs.append(ax)
-        ax = fig.add_subplot(3, 4, col + 5, projection=proj)
+        ax = subfigs[0].add_subplot(2, 4, col + 5, projection=proj)
         axes_anom.append(ax)
 
     # Row 3: regional histograms
-    ax_hist = fig.add_subplot(3, 3, 3)
+    axes_hist = []
+    for i in range(3):
+        ax = subfigs[1].add_subplot(1, 3, i+1)
+        axes_hist.append(ax)
 
     # --- Helper: plot one map panel ---
     def plot_map(ax, data, norm, cmap, title):
         im = ax.pcolormesh(lon, lat, data, transform=data_crs, cmap=cmap, norm=norm)
-        ax.add_feature(cfeature.COASTLINE, linewidth=0.8)
-        ax.add_feature(cfeature.BORDERS,   linewidth=0.5, linestyle=":")
-        ax.add_feature(cfeature.LAND,      facecolor="lightgrey", zorder=0)
-        ax.add_feature(cfeature.OCEAN,     facecolor="aliceblue", zorder=0)
+        ax.add_feature(cfeature.COASTLINE, linewidth=0.8) 
+        ax.gridlines(linewidth=0.3, color="grey", alpha=0.4, linestyle="--")
         ax.set_aspect("auto")
-        ax.set_title(title, fontsize=9)
+        ax.set_title(title, fontsize=12)
         return im
 
     # --- Row 1: absolute means ---
@@ -475,7 +476,7 @@ def summer_days_plot():
     # Row labels
     axes_abs[0].text(
         -0.12, 0.5, "Absolute mean", transform=axes_abs[0].transAxes,
-        fontsize=10, va="center", rotation=90, fontweight="bold"
+        fontsize=12, va="center", rotation=90, fontweight="bold"
     )
 
     # --- Row 2: anomalies ---
@@ -490,30 +491,34 @@ def summer_days_plot():
 
     axes_anom[0].text(
         -0.12, 0.5, "Anomaly vs historical", transform=axes_anom[0].transAxes,
-        fontsize=10, va="center", rotation=90, fontweight="bold"
+        fontsize=12, va="center", rotation=90, fontweight="bold"
     )
 
-    # --- Row 3: hist ---
-    hist_data = [
-        (hist, "Historical (1985-2014)"),
-        (mid_126, "Mid SSP126 (2020-2049)"),
-        (late_126, "Late SSP126 (2070-2099)"),
-        (mid_370, "Mid SSP370 (2020-2049)"),
-        (late_370, "Late SSP370 (2070-2099)")
-    ]
-    for data, label in hist_data:
-        flat = data.flatten()
-        ax_hist.hist(flat, bins=50, density=True, histtype="step", label=label)
+    area_keys = ['NEU', 'CEU', 'MED']
+    for i, area in enumerate(area_keys):
+        mask = regionmask.defined_regions.srex.mask(ds126)
+        data = ds126.where(mask.cf == area)
+        hist_vals = (data[VAR].isel(time=0).values / 30).ravel()
 
-    ax_hist.set_xlabel("Summer days per year", fontsize=10)
-    ax_hist.set_ylabel("Log Frequency", fontsize=10)
-    ax_hist.set_title("Distribution of summer days across grid points", fontsize=10)
-    ax_hist.set_yscale("log")
-    ax_hist.legend(fontsize=9)
-    ax_hist.set_xlim(left=0)
+        label = "Historical (1985-2014)"
+        axes_hist[i].hist(hist_vals, bins=50, density=True, histtype="step", label=label)
+
+        for dataset, scenario in zip([ds126, ds370], ["ssp126", "ssp370"]):
+            data = dataset.where(mask.cf == area)
+            for time_idx, title in zip([1, 2], ["Mid", "Late"]):
+                hist_vals = (data[VAR].isel(time=time_idx).values / 30).ravel()
+                label = f"{title} {scenario.upper()}"
+                axes_hist[i].hist(hist_vals, bins=50, density=True, histtype="step", label=label)
+
+        axes_hist[i].set_xlabel("Summer days per year")
+        axes_hist[i].set_ylabel("Log Density")
+        axes_hist[i].set_title(f"Distribution of summer days across {area} region", fontsize=12)
+        axes_hist[i].set_yscale("log")
+        axes_hist[i].legend()
+        axes_hist[i].set_xlim(left=0)
 
     # --- Final touches ---
-    plt.suptitle("Annual Summer Days (TASMAX > 25°C)", fontsize=13, fontweight="bold", y=0.95)
+    plt.suptitle("Annual Summer Days (TASMAX > 25°C)", fontsize=18, fontweight="bold")
     pg.save(fig, "./figures/data_section/climatology/summer_days.png")
 
 
@@ -634,9 +639,9 @@ if __name__ == "__main__":
     # precip_distribution()
     # plot_temp_hclim()
     # plot_timeseries(x='pr')
-    plot_timeseries_merged(x='pr', running_mean_window=11, scenario='ssp126')
+    # plot_timeseries_merged(x='pr', running_mean_window=11, scenario='ssp126')
     # plot_timeseries_merged_hclim(x='pr', running_mean_window=11)
-    # summer_days_plot()
+    summer_days_plot()
     # plot_domain()
     # plot_warmest_days()
     # plot_wettest_days()
