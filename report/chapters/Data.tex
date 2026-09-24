@@ -1,7 +1,7 @@
 \chapter{Data}
 
 \section{Data structure}
-This thesis will cover a rather large (at least in the machine learning sense) climate data set. The data set covers two time periods; the "historical" period, spanning from 1951 till 2015, and the "future" data set, spanning from 2015 till 2100. In the data we find "images" of the climate, each image contains a number of \glspl{channel}, which covers one climatological variable each (e.g. temperature, precipitation, or wind). One "image" spans one day, and contains an aggregate of data from that day (either minimum, mean, or maximum). The dataset will cover two different climate models, a so-called \gls{gcm} and an \gls{rcm}. Each model covers two carbon emission scenarios (SSP126 and SSP370), in the "future" time period. Additionally, each model has 3 \glspl{realisation} (ensembles) over the entire time period.
+This thesis will cover a rather large (at least in the machine learning sense) climate data set. The data set covers two time periods; the "historical" period, spanning from 1951 till 2015, and the "future" data set, spanning from 2015 till 2100. In the data we find "images" of the climate, each image contains a number of \glspl{channel}, which covers one climatological variable each (e.g. temperature, precipitation, or wind). One "image" spans one day, and contains an aggregate of data from that day (either minimum, mean, or maximum). The dataset will cover two different climate models, a so-called \gls{gcm} and an \gls{rcm}. Each model covers two carbon emission scenarios (\gls{126} and \gls{370}), in the "future" time period. Additionally, each model has 3 \glspl{realisation} (ensembles) over the entire time period.
 
 A visualisation  of the data structure can be found in \autoref{fig:data_structure}.
 
@@ -27,7 +27,7 @@ Naturally, the two climate models operate on two different grid projections. Whi
 In climate science, a climate model is a numerical estimator, which takes satellite data as input, as well as a set of hyperparameters, and uses an expensive physics-based method to calculate how the climate looks on three-dimensional grid (two spatial dimensions and one temporal). In other words, the models take the measured data and estimates how the corresponding climate look on the entire planet, while also estimating a number of years into the future. As the models are highly dependant on their initialisation it is customary to run several \glspl{realisation} to model the climate in a less biased fashion. To make sure, that such internal variation is accounted for, this data set includes 3 \glspl{realisation} for both the historical data, and both scenarios
 
 \subsection{Scenarios} \label{sec:scenarios}
-In the future period, for both data sets, there are two \glspl{scenario}; "SSP126" and "SSP370". SSP is short for "Shared Socioeconomic Pathways" and they describe different versions of how much emission is produced until the year 2100. SSP126 is on the mild, green side of the spectrum, modelling a more sustainable future, where the excess energy on earth eventually declines as the human race start correcting their mistakes. SSP370 is a more conservative estimate, in which the emission level will rise every year, rapidly heating up the planet.
+In the future period, for both data sets, there are two \glspl{scenario}; "\gls{126}" and "\gls{370}". SSP is short for "Shared Socioeconomic Pathways" and they describe different versions of how much emission is produced until the year 2100. \gls{126} is on the mild, green side of the spectrum, modelling a more sustainable future, where the excess energy on earth eventually declines as the human race start correcting their mistakes. \gls{370} is a more conservative estimate, in which the emission level will rise every year, rapidly heating up the planet.
 
 \subsection{Static data}
 Besides the two climate models, there are also two static features. In this sense "static" means that these features do not change over the temporal dimension. The two variables are "Orography", which describes the topography of the target area, and a "Land-Water mask" which describes the ratio of the grid point covered by water. Both features are delivered at a resolution matching the target grid.
@@ -66,35 +66,35 @@ To start off let's have a look at the temporal development of the data. Specific
 
 \begin{figure}[tb]
     \centering
-    \subbottom[11-year running mean of the yearly mean temperatures over the entire EC-Earth domain (see \autoref{fig:domains}).]{
-        \includegraphics[width=.47\linewidth]{figures/data_section/climatology/timeseries_tas_11_.png}
+    \subbottom[11-year running mean of the yearly mean temperatures over the \gls{hclim} domain (see \autoref{fig:domains}), for \gls{scenario} SSP1-2.6.]{
+        \includegraphics[width=.47\linewidth]{figures/data_section/climatology/timeseries_tas_11_ssp126.png}
     }
     ~
-    \subbottom[11-year running mean of the yearly mean temperatures over the entire \gls{hclim} domain (see \autoref{fig:domains}).]{
-        \includegraphics[width=.47\linewidth]{figures/data_section/climatology/timeseries_tas_11_hclim.png}
+    \subbottom[11-year running mean of the yearly mean temperatures over the \gls{hclim} domain (see \autoref{fig:domains}), for \gls{scenario} SSP3-7.0.]{
+        \includegraphics[width=.47\linewidth]{figures/data_section/climatology/timeseries_tas_11_ssp370.png}
     }
-    \caption{11-year running mean of mean temperatures over Europe from 1951 to 2100. Colours blue, orange, and green represent realisation 1, 2, and 3 respectively. The vibrant lines show the ssp370 scenario and the faded lines show the ssp126 scenario.}
+    \caption{11-year running mean of mean temperatures over Europe from 1951 to 2100. Colours blue, orange, and green represent realisation 1, 2, and 3 respectively. The vibrant lines show the \gls{370} scenario and the faded lines show the \gls{126} scenario. Dashed line shows data from the \gls{hclim} model, while solid lines show \gls{ece} data. The grey dashed line shows the end of the historical period (start of the future) in 2015.}
     \label{fig:tas-11-timeseries}
 \end{figure}
 
-One of the most noticeable features of \autoref{fig:tas-11-timeseries} is the early "historical" period. There are very large internal variabilities between the different \glspl{realisation}. Varying as much as 2.5 degrees. This is due to the different initialisation states (as mentioned in \autoref{sec:data-climate-model}). \Gls{realisation} 3 might be initialised during a period with El Niño and \gls{realisation} with La Niña. However, as we move towards the "future" (starting in 2015) the variability decreases. Around 2040, we see the effects of the two different \glspl{scenario} to kick in. The ssp370 estimates accelerate in temperature rising a few degrees above that of the more climate-friendly ssp126 estimate. We also notice a slight difference in temperatures between the low-resolution \gls{ece} and high-resolution \gls{hclim} data. The \gls{hclim} data initially has a slightly higher temperature than the \gls{ece}, however, as time progresses, the \gls{ece} overtakes and concludes at a temperature about 0.1 degrees higher.
+One of the most noticeable features of \autoref{fig:tas-11-timeseries} is the early "historical" period. There are very large internal variabilities between the different \glspl{realisation}. Varying as much as 2.5 degrees. This is due to the different initialisation states (as mentioned in \autoref{sec:data-climate-model}). \Gls{realisation} 3 might be initialised during a period with El Niño and \gls{realisation} with La Niña. However, as we move towards the "future" (starting in 2015) the variability decreases. Around 2040, we see the effects of the two different \glspl{scenario} to kick in. The \gls{370} estimates accelerate in temperature rising a few degrees above that of the more climate-friendly \gls{126} estimate. We also notice a slight difference in temperatures between the low-resolution \gls{ece} and high-resolution \gls{hclim} data. The \gls{hclim} data initially has a slightly higher temperature than the \gls{ece}, however, as time progresses, the \gls{ece} overtakes and concludes at a temperature about 0.1 degrees higher.
 
 Next, look at the development of the precipitation in the same time-frame. Since the distribution of the \glspl{realisation} through time will make the basis for designing the experiments it is important that conclusions made for the distribution of precipitation \glspl{realisation} are the same as those for temperature \glspl{realisation}.
 
 \begin{figure}[tb]
     \centering
-    \subbottom[11-year running mean of the yearly mean precipitation over the entire EC-Earth domain (see \autoref{fig:domains}).]{
-        \includegraphics[width=.47\linewidth]{figures/data_section/climatology/timeseries_pr_11.png}
+    \subbottom[11-year running mean of the yearly mean precipitation over the \gls{hclim} domain (see \autoref{fig:domains}), for \gls{scenario} SSP1-2.6.]{
+        \includegraphics[width=.47\linewidth]{figures/data_section/climatology/timeseries_pr_11_ssp126.png}
     }
     ~
-    \subbottom[11-year running mean of the yearly mean precipitation over the entire \gls{hclim} domain (see \autoref{fig:domains}).]{
-        \includegraphics[width=.47\linewidth]{figures/data_section/climatology/timeseries_pr_11_hclim.png}
+    \subbottom[11-year running mean of the yearly mean precipitation over the \gls{hclim} domain (see \autoref{fig:domains}), for \gls{scenario} SSP3-7.0.]{
+        \includegraphics[width=.47\linewidth]{figures/data_section/climatology/timeseries_pr_11_ssp370.png}
     }
-    \caption{11-year running mean of mean precipitation over Europe from 1951 to 2100. Colours blue, orange, and green represent \gls{realisation} 1, 2, and 3 respectively. The vibrant lines show the ssp370 scenario and the faded lines show the ssp126 scenario.}
+    \caption{11-year running mean of mean precipitation over Europe from 1951 to 2100. Colours blue, orange, and green represent \gls{realisation} 1, 2, and 3 respectively. The vibrant lines show the \gls{370} scenario and the faded lines show the \gls{126} scenario. Dashed line shows data from the \gls{hclim} model, while solid lines show \gls{ece} data. The grey dashed line shows the end of the historical period (start of the future) in 2015.}
     \label{fig:pr-11-timeseries}
 \end{figure}
 
-Looking at \autoref{fig:pr-11-timeseries} it is, again, apparent that the \glspl{realisation} have large internal variation in the "historical" period. Similarly \gls{realisation} 3 is in the higher end of the distribution, while \gls{realisation} 2 is on the lower end. On the other end, the difference in the \glspl{scenario} is not as apparent from this plot. For the \gls{ece} data the ssp126 \gls{realisation} has a lower mean precipitation than the ssp370 \gls{realisation}, however for the \gls{hclim} data, there is no notable difference. Looking at the y-axis, it is noticeable that the \gls{hclim} precipitation is about 25\% higher than the \gls{ece} precipitation.
+Looking at \autoref{fig:pr-11-timeseries} it is, again, apparent that the \glspl{realisation} have large internal variation in the "historical" period. Similarly \gls{realisation} 3 is in the higher end of the distribution, while \gls{realisation} 2 is on the lower end. On the other end, the difference in the \glspl{scenario} is not as apparent from this plot. For the \gls{ece} data the \gls{126} \glspl{realisation} has a lower mean precipitation than the \gls{370} \glspl{realisation}, however for the \gls{hclim} data, there is no notable difference. Comparing \gls{hclim} to \gls{ece} here shows a clear difference. There is more precipitation in \gls{hclim} data, for both \gls{126} and \gls{370}. The difference is about $10^{-6} \frac{kg}{m^{2} s}$ which is roughly 0.1 mm of precipitation per day. The difference most likely stems from the \gls{hclim} model's ability to model at a finer resolution and therefore captures more of the precipitation at mountain peaks and coastlines.
 
 \section{Data splits}
 
