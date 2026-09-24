@@ -11,8 +11,6 @@
 
 \section*{Figure outs - ML}
 \begin{enumerate}
-    \item What to do when epochs are 3 hours of training long? Validations happen seldom, early stopping is no good, difficult to test, etc.
-    \item And what about cross-validation for hyperparameter tuning? It would take ages to do grid-search training
     \item \st{What about non-square, non-$2^n$ sized image-targets? Interpolation? Special architecture? (Targets are 412x424, nearest $2^n$ is 512, $412/(2^3)=51.5$).} zero-padding is better than interpolation! Use 432 size, as that has 4 possible halfings. 
     \item \st{Normalization on weather data. Model does not learn scale, but since scale is important for climate how do we "rescale" (un-normalize) the data?} You have to unnormalize properly....
 \end{enumerate}
