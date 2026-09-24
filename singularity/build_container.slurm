@@ -12,7 +12,7 @@
 
 set -euo pipefail
 
-module purge
+# module purge
 module load CrayEnv
 module load PRoot
 
@@ -28,4 +28,4 @@ export NUMBA_CACHE_DIR="/tmp/$USER/numba_cache"
 
 cd ~/Desktop/sirius
 
-srun --account=project_465002687 singularity build /scratch/project_465002687/ec_earth/containers/dockerv3.sif singularity/update.def
+srun --account=project_465002687 singularity build /scratch/project_465002687/ec_earth/containers/dockerv4.sif singularity/update.def

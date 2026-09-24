@@ -1,5 +1,5 @@
 Bootstrap: localimage
-From: /scratch/project_465002687/ec_earth/containers/docker.sif
+From: /scratch/project_465002687/ec_earth/containers/dockerv3.sif
 
 %post
     set -eux
@@ -7,7 +7,7 @@ From: /scratch/project_465002687/ec_earth/containers/docker.sif
     . /opt/venv/bin/activate
 
     python -m pip install --no-cache-dir \
-        xclim
+        regionmask
 
     python -m pip check
 
@@ -17,4 +17,4 @@ From: /scratch/project_465002687/ec_earth/containers/docker.sif
     python -c "import torch; print('PyTorch:', torch.__version__)"
     python -c "import torchvision; print('TorchVision:', torchvision.__version__)"
     python -c "import lightning; print('Lightning:', lightning.__version__)"
-    python -c "import xclim; print('xclim:', xclim.__version__)"
+    python -c "import regionmask; print('regionmask:', regionmask.__version__)"
