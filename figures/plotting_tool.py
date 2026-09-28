@@ -6,9 +6,9 @@ import xclim
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 import regionmask
-from scipy.stats import gaussian_kde
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
+import matplotlib.patheffects as pe
 import numpy as np
 
 from figures import plt_guide as pg
@@ -632,6 +632,80 @@ def plot_residuals(x='tas', period='historical'):
     pg.save(plt, f"./figures/method/residuals_{x}_{period}")
     plt.close()
 
+def contour():
+    file = Path('/scratch/project_465002687/ec_earth/targets/HCLIM/EC-Earth3-Veg/historical/r1i1p1f1/day/tas/tas_EUR-12_EC-Earth3-Veg_historical_r1i1p1f1_HCLIMcom-SMHI_HCLIM43-ALADIN_v1-r1_day_20010101-20051231.nc')
+    ds = xr.open_dataset(file)
+    data = ds.tas.isel(time=268)
+    data = data[240:280, 200:245]
+
+    fig = plt.figure(figsize=(11.8,11.8/(1.618)), layout="constrained")
+    data_crs = ccrs.PlateCarree()
+
+    N = 256
+    vals = np.ones((N, 4))
+    vals[:, 0] = np.linspace(196/256, 1, N)
+    vals[:, 1] = np.linspace(18/256, 1, N)
+    vals[:, 2] = np.linspace(55/256, 1, N)
+    cmap = mcolors.ListedColormap(vals)
+    norm = mcolors.Normalize(vmin=data.min(), vmax=data.max())
+
+    lon = data.lon.values
+    lat = data.lat.values
+
+    def plot_map(ax, data, norm, cmap, title):
+        im = ax.contour(lon, lat, data, levels=30, transform=data_crs, cmap=cmap, norm=norm)
+        ax.axis('off')
+        return im
+
+    rp = ds['rotated_latitude_longitude'].attrs
+    proj = ccrs.RotatedPole(
+        pole_longitude=rp['grid_north_pole_longitude'],
+        pole_latitude=rp['grid_north_pole_latitude'],
+    )
+
+    ax = fig.add_subplot(1, 1, 1, projection=proj)
+
+    plot_map(ax, data, norm, cmap, "")
+
+    plt.savefig('test.png', transparent=True, dpi=300)
+
+def plot_ipcc_regions():
+    """
+    Plots the IPCC regions on a map.
+    """
+    fig = plt.figure(figsize=FIGSIZE)
+
+    srex = regionmask.defined_regions.srex
+
+    # regions can be selected by number, abbreviation or long name
+    regions = ["NEU", "CEU", "MED"]
+
+    # choose a good projection for regional maps
+    projection=ccrs.Orthographic(10.45, 51.2)
+
+    text_kws = dict(
+        bbox=dict(color="none"),
+        path_effects=[pe.withStroke(linewidth=2, foreground="w")],
+        color="#67000d",
+        fontsize=8,
+    )
+
+    ax = srex[regions].plot(
+        add_ocean=True,
+        resolution="50m",
+        projection=projection,
+        label="abbrev",
+        text_kws=text_kws,
+    )
+
+    # fine tune the extent
+    ax.set_extent([-15, 45, 28, 76], crs=ccrs.PlateCarree())
+
+    plt.title("IPCC Regions")
+    pg.save(fig, "./figures/data_section/ipcc_regions.png")
+    plt.close()
+
+
 if __name__ == "__main__":
     
     pg.setup()
@@ -641,7 +715,7 @@ if __name__ == "__main__":
     # plot_timeseries(x='pr')
     # plot_timeseries_merged(x='pr', running_mean_window=11, scenario='ssp126')
     # plot_timeseries_merged_hclim(x='pr', running_mean_window=11)
-    summer_days_plot()
+    # summer_days_plot()
     # plot_domain()
     # plot_warmest_days()
     # plot_wettest_days()
@@ -649,5 +723,7 @@ if __name__ == "__main__":
     # plot_wettest_days_hclim()
     # plot_hwfi_days(x="tasmax")
     # plot_residuals(x='pr', period='late')
+    # contour()
+    plot_ipcc_regions()
 
     pass
