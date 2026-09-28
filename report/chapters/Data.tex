@@ -20,7 +20,7 @@ Naturally, the two climate models operate on two different grid projections. Whi
 \begin{figure}[tb]
     \centering
     \includegraphics[width=0.5\linewidth]{figures/data_section/domains.png}
-    \caption{Spatial areas of the two climate model datasets. The blue line represents the outer edge of the \gls{ece} (\gls{gcm}) data, and the orange-red line represents the outer edge of the \gls{hclim} (\gls{ddm}) data}
+    \caption{Spatial areas of the two climate model datasets. The blue line represents the outer edge of the \gls{ece} (\gls{gcm}) data, and the orange-red line represents the outer edge of the \gls{hclim} (\gls{ddm}) data.}
     \label{fig:domains}
 \end{figure}
 
@@ -58,6 +58,11 @@ As mentioned in \autoref{sec:scenarios} the \gls{ece} and \gls{hclim} data has 1
     \label{tab:variables}
 \end{table}
 
+\subsection{Regridding}
+
+As it was mentioned in \autoref{sec:data-climate-model}, the two data sets for this thesis are defined on two different grids. They are not the same size, not the same resolution, and neither do they use the same projection of the planet.
+However, it happens in certain parts of the project, that comparisons have to be made between these data sets, which require point by point computations. As such the \gls{ece} data will be "regridded", i.e. the data will be interpolated and cropped to fit the grid, size, and projection of the \gls{hclim} data. As it is costumed in climate science a bilinear interpolation will be used for temperatures while a conservative interpolation will be used for precipitation (as this is a mass). The regridded data will henceforth be referred to as "regridded" or "regridded \gls{ece}"
+
 \section{Data distribution} \label{sec:data-distribution}
 In this section I will analyse the distributions and temporal developments of the data to develop an understanding of how the climate data can be modelled. This analysis is done prior to creating the model in order to best create preprocessing flows, that match the model capabilities and functions.
 
@@ -66,12 +71,12 @@ To start off let's have a look at the temporal development of the data. Specific
 
 \begin{figure}[tb]
     \centering
-    \subbottom[11-year running mean of the yearly mean temperatures over the \gls{hclim} domain (see \autoref{fig:domains}), for \gls{scenario} SSP1-2.6.]{
-        \includegraphics[width=.47\linewidth]{figures/data_section/climatology/timeseries_tas_11_ssp126.png}
+    \subbottom[11-year running mean of the yearly mean temperatures over the \gls{hclim} domain (see \autoref{fig:domains}), for \gls{scenario} \gls{126}.]{
+        \includegraphics[width=.47\linewidth]{figures/data_section/timeseries/timeseries_tas_11_ssp126.png}
     }
     ~
-    \subbottom[11-year running mean of the yearly mean temperatures over the \gls{hclim} domain (see \autoref{fig:domains}), for \gls{scenario} SSP3-7.0.]{
-        \includegraphics[width=.47\linewidth]{figures/data_section/climatology/timeseries_tas_11_ssp370.png}
+    \subbottom[11-year running mean of the yearly mean temperatures over the \gls{hclim} domain (see \autoref{fig:domains}), for \gls{scenario} \gls{370}.]{
+        \includegraphics[width=.47\linewidth]{figures/data_section/timeseries/timeseries_tas_11_ssp370.png}
     }
     \caption{11-year running mean of mean temperatures over Europe from 1951 to 2100. Colours blue, orange, and green represent realisation 1, 2, and 3 respectively. The vibrant lines show the \gls{370} scenario and the faded lines show the \gls{126} scenario. Dashed line shows data from the \gls{hclim} model, while solid lines show \gls{ece} data. The grey dashed line shows the end of the historical period (start of the future) in 2015.}
     \label{fig:tas-11-timeseries}
@@ -84,11 +89,11 @@ Next, look at the development of the precipitation in the same time-frame. Since
 \begin{figure}[tb]
     \centering
     \subbottom[11-year running mean of the yearly mean precipitation over the \gls{hclim} domain (see \autoref{fig:domains}), for \gls{scenario} SSP1-2.6.]{
-        \includegraphics[width=.47\linewidth]{figures/data_section/climatology/timeseries_pr_11_ssp126.png}
+        \includegraphics[width=.47\linewidth]{figures/data_section/timeseries/timeseries_pr_11_ssp126.png}
     }
     ~
     \subbottom[11-year running mean of the yearly mean precipitation over the \gls{hclim} domain (see \autoref{fig:domains}), for \gls{scenario} SSP3-7.0.]{
-        \includegraphics[width=.47\linewidth]{figures/data_section/climatology/timeseries_pr_11_ssp370.png}
+        \includegraphics[width=.47\linewidth]{figures/data_section/timeseries/timeseries_pr_11_ssp370.png}
     }
     \caption{11-year running mean of mean precipitation over Europe from 1951 to 2100. Colours blue, orange, and green represent \gls{realisation} 1, 2, and 3 respectively. The vibrant lines show the \gls{370} scenario and the faded lines show the \gls{126} scenario. Dashed line shows data from the \gls{hclim} model, while solid lines show \gls{ece} data. The grey dashed line shows the end of the historical period (start of the future) in 2015.}
     \label{fig:pr-11-timeseries}
@@ -104,3 +109,62 @@ Looking at \autoref{fig:pr-11-timeseries} it is, again, apparent that the \glspl
 
  \section{Climatology}
 
+The next step is to create a reference model for the climate change through the \gls{hclim} dataset. This is done to gain an understanding of how current downscaling methods perform, not on a specific level but on a more general climate level. Eventually this can be a means to quantify RQ\ref{it:rq3}. More specifically, we will be evaluating three different climate indecies (all from the Expert Team for Climate Change Detection and Indecies - \href{https://etccdi.pacificclimate.org/list_27_indices.shtml}{ETCCDI}); annual summer days, annual frost days, and annual heavy precipitation days. The analysis will be carried out on three temporal periods; the historical 1985-2014 (used as reference), the mid century (2020-2050), and the late century (2070-2100). All of which have been shifted by 2 months to generalise the seasons of each year. 
+Furthermore, to show regional changes, we will be using three of the IPCC reference regions v4 (Intergovernmental Panel on Climate Change - \href{https://interactive-atlas.ipcc.ch/regional-information}{IPCC}); Northern Europe (NEU), Central Europe (CEU), and the Mediterranean (MED).
+
+\subsection{Annual summer days}
+
+The annual summer days index is a standardised index to show the change in temperature over time. To detach from the absolute temperature values, and instead focus on general climate change, the metric measures the annual number of days in which the temperature exceeds 25°C. In our data set, since it only contains daily data, this is modelled as the maximum temperature (tasmax) exceeding 25°C. The model is made per grid point and will thus show a spatial map of the mean number of summer days over the chosen periods. The figure is shown in \autoref{fig:summer_days}.
+
+\begin{figure}[tb]
+    \centering
+    \includegraphics[width=0.8\linewidth]{figures/data_section/climatology/summer_days_hclim_r3i1p1f1.png}
+    \caption{Annual summer days in the \gls{hclim} data for \gls{realisation} three. Annual summer days is defined as the number of days in which tasmax exceeds 25°C. The top row shows the absolute number of mean summer days for \gls{126} (mid and late century) and \gls{370} (mid and late century). The middle row shows the increase in annual summer days to the historical reference period (i.e. the change in climate). The last row shows the distribution of annual summer days in the three IPCC regions (see \href{https://interactive-atlas.ipcc.ch/regional-information}{here}). This figure shows only data from \gls{realisation} three, while one and two can be found as \autoref{fig:summer_days_r1} and \autoref{fig:summer_days_r2}.}
+    \label{fig:summer_days}
+\end{figure}
+
+To recap, it would be expected of this figure to show a small change in the mid century periods and a larger change in the two late periods as the globe heats up. Additionally, it would be expected to see a larger change in the \gls{370} \gls{scenario}, as this has a higher warming level. For the histograms in the bottom row it would be expected to see few summer days in the northern region (NEU), with slightly more in the central region (CEU). In the Mediterranean region it is expected to see more summer days than not. Looking at \autoref{fig:summer_days} we see that the figure is more or less as expected. Land areas have more summer days than oceanic ones, and the further south the more summer days. Northern Europe indeed has a lot fewer summer days than the Mediterranean. Not even climate change can break those rules. The top row of plots shows that Europe (and Northern Africa) ranges from 0 all the way to around 300 annual summer days. In \gls{126} and the mid century \gls{370} images there is a clear distinction between water regions and land regions, and the border of regular summer days lies just south of Denmark. In the late century \gls{370} \gls{scenario} however, the Mediterranean heats up, and produces around 200 annual summer days, even in areas far from the coast. Additionally the border of regular summer days rises to lie somewhere on latitude of Northern Skåne.
+
+The second row confirms the image, just described. In general it is clear that the areas hid the hardest by the rise in temperature is the Mediterranean sea, with areas in the late century \gls{370} increasing upwards of 100 annual summer days. A similar story is seen in the Black Sea with the worst development in the Red Sea.
+
+The bottom row shows us a regional view of the change in distributions of the annual summer days. As described we see a clear difference in the three regions. Furthermore, it shows a quantitative view of the increase in annual summer days from the historical reference period to the various warming scenarios. This further enhances the picture of how big the difference is from the historical period to the late century \gls{370}. Let's zoom in on the Northern European (NEU) region. Differently from what was clear in the two rows above, this plot shows the relative difference in summer days much more clearly. It shows that the maximum number of annual summer days will almost double. In the two other regions; Central Europe and the Mediterranean, the distribution is similarly scaled towards a higher number of annual summer days. 
+
+In summary, the summer day index paints a picture of how and where the climate will change. Additionally, we see how the different temporal periods and SSP \glspl{scenario} have an effect. While the two mid century images have a smaller change, all warming \glspl{scenario} show an increase in annual summer days.
+
+\subsection{Annual frost days}
+
+While the annual summer days index shows how "warm" the climate will be through time, it is also important to look at how "cold" it will become. Could the temperature simply spread more, meaning there would be more of both warm and cold days? In \autoref{fig:frost_days} we see the distribution of the so-called "annual frost days index". Frost days are defined as days in which the minimum temperature (tasmin) subceeds 0°C. The index is important to show the change in icy and snowy regions. It answers the previous question clearly: The climate is getting warmer. 
+
+\begin{figure}[tb]
+    \centering
+    \includegraphics[width=0.8\linewidth]{figures/data_section/climatology/frost_days_hclim_r3i1p1f1.png}
+    \caption{Annual frost days in the \gls{hclim} domain for \gls{realisation} three. Annual frost days are defined as the number of days in which the daily minimum temperature (tasmin) subceeds 0°C. The top row shows the mean number of annual frost days for \gls{126} (mid and late century) and \gls{370} (mid and late century). The middle row shows the change in annual frost days to the historical reference period (i.e. the change in climate). The last row shows the distribution of annual frost days in the three IPCC regions (see \href{https://interactive-atlas.ipcc.ch/regional-information}{here}). This figure shows only data from \gls{realisation} three, while one and two can be found as \autoref{fig:frost_days_r1} and \autoref{fig:frost_days_r2}.}
+    \label{fig:frost_days}
+\end{figure}
+
+When looking at frost days, it is expected to see two features highlighted; mountains and ice sheets. In this domain there are no permanent ice sheets, however, ice might drift from Greenland to the Denmark Strait (seen just north-northeast of Iceland). In terms of mountain ranges, the Alps, the Carpathians, the Pyrenees, and even part of the Caucasus mountains shows as clear blue spots in a field of white. Additionally, we see the mountains to the north, both in the northern Scandinavia and on Iceland. It is clear that mountainous areas have far more frost days than lower regions. 
+
+Looking at the mean annual frost days in the top row of \autoref{fig:frost_days} it is, once again, apparent that the mid and late century \gls{126} and the mid century \gls{370} show relatively small changes in the cold climate. The primary changes is the number of frost days north and northeast of Iceland. This suggests that one of the first changes the climate will see is the slow eradication of the Arctic sea ice. Turning to the late century \gls{370}, in which the biggest change is seen, it seems that most of the northern frost days have disappeared and Iceland no longer sees sub-zero temperatures over the ocean. Additionally the land area of mainland Europe and Africa turns mostly white. In this case, only the higher, mountainous regions exhibit frost days while lower areas like Denmark, the Netherlands, and the British Isles will loose the last snowy days completely.
+
+The residual plots in the second row of \autoref{fig:frost_days} tells much of the same story. The northern part of the domain is hit first and hardest, with a reduction of upwards of 200 annual frost days. The mainland also shows fewer frost days with the most apparent changes in the northern regions; Scandinavia and the Baltics. Interestingly enough, it does not seem like the mountain ranges have a bigger reduction in frost days than the rest of the mainland. 
+
+The histograms in the third row of \autoref{fig:frost_days} visualises a similar, and expected, trend given the above spatial plots. The northern regions, which had upwards of 320 annual frost days are reduced all the way to 240. Similarly to the same plot for the summer days (\autoref{fig:summer_days}) the distributions of frost days seem to be directly scaled as the climate warms, this time just to the left. 
+
+\subsection{Annual wet days}
+
+The next index is the annual r10mm index. This index shows, different from the other two, the distribution of precipitation over the \gls{hclim} domain. It is defined as days in which the total precipitation exceeds 10 mm (and in this case is calculated as days in which the total daily precipitation exceeds $10 \frac{kg}{m^2}$). Different from the other indecies, this is not a frequently occurring event, and happens at max 120 days per year. Areas with a lot of precipitation are typically on the east coast, toward the Atlantic, where precipitation comes on form of rain, and in mountainous regions, where precipitation usually comes as snow.
+
+\begin{figure}[tb]
+    \centering
+    \includegraphics[width=0.8\linewidth]{figures/data_section/climatology/wet_days_hclim_r3i1p1f1.png}
+    \caption{Annual wet days in the \gls{hclim} domain for \gls{realisation} three. Annual wet days are defined as the number of days in which the total precipitation exceeds $10 \frac{kg}{m^2} \approx 10 mm$. The top row shows the mean number of annual wet days for \gls{126} (mid and late century) and \gls{370} (mid and late century). The middle row shows the change in annual wet days to the historical reference period (i.e. the change in climate). The last row shows the distribution of annual wet days in the three IPCC regions (see \href{https://interactive-atlas.ipcc.ch/regional-information}{here}). This figure shows only data from \gls{realisation} three, while one and two can be found as \autoref{fig:wet_days_r1} and \autoref{fig:wet_days_r2}.}
+    \label{fig:wet_days}
+\end{figure}
+
+In \autoref{fig:wet_days} we see the annual wet days in the same spatial and temporal regions as for the other indecies. The top-row spatial plots does not show a high magnitude of wet days. Due to the small number of annual wet days, the contrast can be difficult to quantify, let's instead turn the attention to the residual plots in the second row. It is apparent that the number of wet days change in the order of about 25 days in either direction. Thinking back to \autoref{fig:pr-11-timeseries}, in which we saw the development of precipitation through time, remember that the difference between the mid century and late century periods was rather small. Seeing this transformation on a spatial map, it seems that while the total amount of precipitation over the domain remains steady, the location on which it lands changes. In the two mid century residual figures the number of wet days mostly decreases (the map is more red than blue), especially the areas around Gibraltar and the ocean between Iceland and the British Isles will exhibit fewer wet days. However, from \autoref{fig:pr-11-timeseries} we know that the total amount of precipitation rises, meaning that it must become more dense in the wetter regions. Looking on to the late century the wet days come back. Especially in the northern regions, from Iceland to Scandinavia the number of wet days will increase. The reduction between Iceland and the British Isles becomes less apparent than the previous period, and instead moves to areas around the Mediterranean.
+
+\subsection{Anomaly Correlation Coefficient}
+
+One last representation is needed to create a full picture of model performance on the climate task. This metric is the anomaly correlation coefficient (ACC), and it measures the temporal correlation for each pixel in the two models. This is used to make sure that the \gls{downscaling} model captures the temporal / seasonal changes in the variable. One thing is to model the spatial relationship for each variable, but a real climate emulator must be able to model the day to day changes as well. The ACC is computed as the temporal correlation between the \gls{ece} data and the \gls{hclim} data at each grid point.
+
+In figure ??? the ACC can be seen for each variable of the \gls{hclim} data. The plots show where the two models fundamentally agree on the temporal development of the data. As it might be expected, this is more apparent over land-masses as the spatial resolution is ever more important here, than over the ocean. Especially around the coastlines there is a lower correlation, due to the disagreement in where the coast actually is. For temperatures, the models seem to agree to a greater extend with slight exceptions, especially around the coast of the Mediterranean. For the precipitation however, the story is different. Here there are two remarkable features. One is that the grid is visible for this variable. This likely comes from the conservative interpolation used to create the regridded data set. The other features the to decrease in correlation on the eastern side of the map. It seems that the models have an agreement of the rain over the Atlantic ocean, but the further away from there the larger the disagreement. It is known, that precipitation is a difficult variable to model, as it is highly unreliable, and dependant on many features. It is therefore not unlikely that the \gls{ece} model fails to correctly capture the fine-resolution developments of the variable over the larger land-masses.
