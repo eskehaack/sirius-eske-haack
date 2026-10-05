@@ -51,13 +51,13 @@ def frost_days_plot(member="r1i1p1f1"):
     div_norm = mcolors.TwoSlopeNorm(vcenter=0, vmin=-200, vmax=200)
 
     # --- Layout ---
-    titles  = ["Mid SSP126\n(2020-2049)", "Late SSP126\n(2070-2099)",
-               "Mid SSP370\n(2020-2049)", "Late SSP370\n(2070-2099)"]
+    titles  = ["Mid SSP126 (2020-2049)", "Late SSP126 (2070-2099)",
+               "Mid SSP370 (2020-2049)", "Late SSP370 (2070-2099)"]
     datasets     = [mid_126,       late_126,       mid_370,       late_370      ]
     anom_datasets = [anom_mid_126, anom_late_126,  anom_mid_370,  anom_late_370 ]
 
-    fig     = plt.figure(figsize=(18,14), layout="constrained")
-    subfigs = fig.subfigures(2,1, height_ratios=[4.0, 1.5])
+    fig     = plt.figure(figsize=(6.4, 6.4/1.3))
+    subfigs = fig.subfigures(2,1, height_ratios=[2.0, 1.0])
 
     # Row 1 & 2: 4 map panels each
     axes_abs  = []
@@ -75,12 +75,13 @@ def frost_days_plot(member="r1i1p1f1"):
         axes_hist.append(ax)
 
     # --- Helper: plot one map panel ---
-    def plot_map(ax, data, norm, cmap, title):
+    def plot_map(ax, data, norm, cmap, title=None):
         im = ax.pcolormesh(lon, lat, data, transform=data_crs, cmap=cmap, norm=norm)
-        ax.add_feature(cfeature.COASTLINE, linewidth=0.8) 
-        ax.gridlines(linewidth=0.3, color="grey", alpha=0.4, linestyle="--")
+        ax.add_feature(cfeature.COASTLINE, linewidth=0.5) 
+        ax.gridlines()
         ax.set_aspect("auto")
-        ax.set_title(title, fontsize=12)
+        if title:
+            ax.set_title(title)
         return im
 
     # --- Row 1: absolute means ---
@@ -89,30 +90,24 @@ def frost_days_plot(member="r1i1p1f1"):
 
     fig.colorbar(
         plt.cm.ScalarMappable(norm=abs_norm, cmap=abs_cmap),
-        ax=axes_abs, orientation="vertical", fraction=0.02, pad=0.04,
+        ax=axes_abs, orientation="vertical", fraction=0.02, pad=0.02,
         label="Frost days per year"
     )
 
     # Row labels
-    axes_abs[0].text(
-        -0.12, 0.5, "Absolute mean", transform=axes_abs[0].transAxes,
-        fontsize=12, va="center", rotation=90, fontweight="bold"
-    )
+    axes_abs[0].set_ylabel("Absolute mean")
 
     # --- Row 2: anomalies ---
     for col, (data, title) in enumerate(zip(anom_datasets, titles)):
-        im_div = plot_map(axes_anom[col], data, div_norm, div_cmap, title)
+        im_div = plot_map(axes_anom[col], data, div_norm, div_cmap)
 
     fig.colorbar(
         plt.cm.ScalarMappable(norm=div_norm, cmap=div_cmap),
-        ax=axes_anom, orientation="vertical", fraction=0.02, pad=0.04,
+        ax=axes_anom, orientation="vertical", fraction=0.02, pad=0.02,
         label="Δ Frost days vs historical"
     )
 
-    axes_anom[0].text(
-        -0.12, 0.5, "Anomaly vs historical", transform=axes_anom[0].transAxes,
-        fontsize=12, va="center", rotation=90, fontweight="bold"
-    )
+    axes_anom[0].set_ylabel("Anomaly vs historical")
 
     area_keys = ['NEU', 'CEU', 'MED']
     for i, area in enumerate(area_keys):
@@ -121,24 +116,32 @@ def frost_days_plot(member="r1i1p1f1"):
         hist_vals = (data[VAR].isel(time=0).values / 30).ravel()
 
         label = "Historical (1985-2014)"
-        axes_hist[i].hist(hist_vals, bins=50, density=True, histtype="step", label=label)
+        axes_hist[i].hist(hist_vals, bins=50, density=True, histtype="step", label=label, linewidth=0.5,)
 
         for dataset, scenario in zip([ds126, ds370], ["ssp126", "ssp370"]):
             data = dataset.where(mask.cf == area)
             for time_idx, title in zip([1, 2], ["Mid", "Late"]):
                 hist_vals = (data[VAR].isel(time=time_idx).values / 30).ravel()
                 label = f"{title} {scenario.upper()}"
-                axes_hist[i].hist(hist_vals, bins=50, density=True, histtype="step", label=label)
+                axes_hist[i].hist(hist_vals, bins=50, density=True, histtype="step", label=label, linewidth=0.5)
 
         axes_hist[i].set_xlabel("Frost days per year")
         axes_hist[i].set_ylabel("Log Density")
-        axes_hist[i].set_title(f"Distribution of frost days across {area} region", fontsize=12)
+        axes_hist[i].set_title(f"Frost days across {area} region")
         axes_hist[i].set_yscale("log")
-        axes_hist[i].legend()
         axes_hist[i].set_xlim(left=0, right=366)
 
+    handles, labels = axes_hist[0].get_legend_handles_labels()
+    subfigs[1].legend(
+        handles, labels,
+        loc="lower center",
+        bbox_to_anchor=(0.5, -0.15),
+        borderaxespad=0.5,
+        ncols=5,
+    )
+
     # --- Final touches ---
-    plt.suptitle("Annual Frost Days (TASMIN < 0°C)", fontsize=18, fontweight="bold")
+    plt.suptitle("Annual Frost Days (TASMIN < 0°C)")
     return fig
 
 if __name__ == "__main__":

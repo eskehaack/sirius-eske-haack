@@ -15,10 +15,8 @@ Usage:
     fig, ax = plt.subplots()
     ax.plot(x, y, color=COLORS["blue"])
 """
-
 import matplotlib as mpl
 import matplotlib.pyplot as plt
-import matplotlib.ticker as ticker
 
 
 # ── Palette ───────────────────────────────────────────────────────────────────
@@ -66,12 +64,13 @@ FONT_FAMILY = "serif"
 USE_LATEX   = False          # set False if LaTeX is not installed on your machine
 
 FONT_SIZES = {
-    "title":       18,
-    "axis_label":  12,
-    "tick_label":   9,
-    "legend":       9,
-    "annotation":   8,
-    "caption":      8,
+    "suptitle":     8,  # figure-level title (fig.suptitle)
+    "title":        7,   # axes-level title (ax.set_title)
+    "axis_label":   7,   # x/y axis labels
+    "tick_label":   7,   # tick labels
+    "legend":       7,
+    "annotation":   7,
+    "caption":      7,
 }
 
 # ── Format ────────────────────────────────────────────────────────────────────
@@ -86,9 +85,9 @@ PDF_MODE = False
 
 GOLDEN = 1.618
 
-FULL_WIDTH  = 5.90   # inches  ≈ 15.0 cm  (common single-column text width)
-HALF_WIDTH  = 2.87   # inches  ≈  7.3 cm  (two figures side-by-side)
-FULL_HEIGHT = FULL_WIDTH / GOLDEN   # ≈ 3.65 in — good default
+FULL_WIDTH  = 6.4
+HALF_WIDTH  = 3.2
+FULL_HEIGHT = FULL_WIDTH / GOLDEN 
 
 # Convenience tuples
 FIG_FULL  = (FULL_WIDTH, FULL_HEIGHT)   # standard single figure
@@ -118,12 +117,15 @@ def setup(use_latex: bool = USE_LATEX) -> None:
         # ── Font ──────────────────────────────────────────────────────────────
         "font.family":          FONT_FAMILY,
         "font.size":            FONT_SIZES["tick_label"],
+        "figure.titlesize":     FONT_SIZES["suptitle"],
         "axes.titlesize":       FONT_SIZES["title"],
         "axes.labelsize":       FONT_SIZES["axis_label"],
         "xtick.labelsize":      FONT_SIZES["tick_label"],
         "ytick.labelsize":      FONT_SIZES["tick_label"],
         "legend.fontsize":      FONT_SIZES["legend"],
         "legend.title_fontsize": FONT_SIZES["legend"],
+        "figure.titleweight":   "bold",
+        "axes.titleweight":     "normal",
 
         # ── Color cycle ───────────────────────────────────────────────────────
         "axes.prop_cycle": mpl.cycler(color=PALETTE),
@@ -131,11 +133,12 @@ def setup(use_latex: bool = USE_LATEX) -> None:
         # ── Figure ────────────────────────────────────────────────────────────
         "figure.figsize":       FIG_FULL,
         "figure.dpi":           150,        # screen preview quality
-        "savefig.dpi":          300,        # output quality
-        "savefig.format":       "pdf",
+        "savefig.dpi":          150,        # output quality
+        "savefig.format":       "png" if not PDF_MODE else "pdf",
         "savefig.bbox":         "tight",
-        "savefig.pad_inches":   0.05,
+        "savefig.pad_inches":   0.02,
         "figure.facecolor":     COLORS["background"],
+        'figure.constrained_layout.use': True,
 
         # ── Axes ──────────────────────────────────────────────────────────────
         "axes.facecolor":       COLORS["background"],

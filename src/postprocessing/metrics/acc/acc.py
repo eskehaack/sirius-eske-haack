@@ -11,18 +11,18 @@ def acc_plot(scenario='ssp126', member='r1i1p1f1'):
     Function to plot the Anomaly Correlation Coefficient.
     """
 
-    fig = plt.figure(figsize=(11.8,11.8/(1.618*2)), layout="constrained")
+    fig = plt.figure(figsize=(6.4, 6.4/(1.618*2)))
     data_crs = ccrs.PlateCarree()
 
-    cmap = "gray"
+    cmap = "hot"
     norm = mcolors.Normalize(vmin=0, vmax=1)
 
     def plot_map(ax, data, norm, cmap, title):
         im = ax.pcolormesh(lon, lat, data, transform=data_crs, cmap=cmap, norm=norm)
-        ax.add_feature(cfeature.COASTLINE, linewidth=0.3) 
-        ax.gridlines(linewidth=0.3, color="grey", alpha=0.4, linestyle="--")
+        ax.add_feature(cfeature.COASTLINE, linewidth=0.5) 
+        ax.gridlines(linewidth=0.5, color="grey", alpha=0.4, linestyle="--")
         ax.set_aspect("auto")
-        ax.set_title(title, fontsize=12)
+        ax.set_title(title)
         return im
 
     for i, x in enumerate(["tas", "tasmax", "tasmin", "pr"]):
@@ -51,7 +51,7 @@ def acc_plot(scenario='ssp126', member='r1i1p1f1'):
         label="Anomaly Correlation Coefficient"
     )
 
-    fig.suptitle(f"Anomaly Correlation Coefficient - {scenario.upper()} - {member}", fontsize=14)
+    fig.suptitle(f"Anomaly Correlation Coefficient - {scenario.upper()} - {member}")
 
     return fig
 
