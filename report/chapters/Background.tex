@@ -2,11 +2,67 @@
 
 \section{Super-Resolution}
 
-Super-resolution, downscaling, upscaling - "A sweet child has many names" (as we say in Danish). To avoid any terminological confusion let's first define the term. In machine learning (where it is referred to as super-resolution or upscaling), the term refers to the task of enhancing the resolution of data. In other words, increase the frequency of data points along some serial dimension. In climate science, where the word "Downscaling" is often used, the term refers to the task of reducing the space between data point along a serial dimension. In both fields, the task is the same: Along some dimension, either spatial or temporal, increase the resolution of whatever data you are dealing with.
+Super-resolution, \gls{downscaling}, upscaling: To avoid any terminological confusion let's first define the term. In machine learning (where the task is referred to as super-resolution or upscaling), the term refers to the task of enhancing the resolution of data. In other words, increase the frequency of data points along some serial dimension. In climate science, where the word "\gls{downscaling}" is often used, the term refers to the task of reducing the space between data point along a serial dimension. In both fields, the task is the same: Along some dimension, either spatial or temporal, increase the resolution of the data you are dealing with. As this thesis primarily caters to the world of climate science, I will refer to the task as "\gls{downscaling}".
+More specifically, the task in this thesis will be spatial \gls{downscaling}, from the 1° regular grid \gls{ece} data to the 12.3 km rotated pole grid \gls{hclim} data. 
 
-In this thesis the task will be spatial \gls{downscaling}, and I will refer to it as such from here on out.
+There exists an abundance of different ways to downscale a climate data set. The easiest (of which there has already been some figures in the Data chapter), is bilinear downscaling.
+
+\subsection{Bilinear Interpolation}
+
+Bilinear interpolation works, in 2 dimensions, much like a linear interpolation does in 1 dimension. To perform a bilinear interpolation first imagine the nearest four grid points to the desired interpolation value. Let's denote the four points as $Q_{i,j} = (x_i, y_j)$ in which $i, j \in \{1,2\}$, and the unknown function, $f$. Additionally, we denote the desired value as $f(x, y)$. This allows for the computation of the horizontal linear interpolation components: 
+\begin{equation}
+    f(x,y_1) = \frac{x_2 - x}{x_2 - x_1}f(Q_{1,1}) + \frac{x - x_1}{x_2 - x_1}f(Q_{2,1})
+\end{equation}
+\begin{equation}
+    f(x,y_2) = \frac{x_2 - x}{x_2 - x_1}f(Q_{1,2}) + \frac{x - x_1}{x_2 - x_1}f(Q_{2,2})
+\end{equation}
+Which can be substituted into the vertical component.
+\begin{equation}
+    f(x,y) = \frac{y_2 - y}{y_2 - y_1}f(x,y_1) + \frac{y - y_1}{y_2 - y_1}f(x,y_2)
+\end{equation}
+This method is used for interpolation of smooth climate variables like temperature.
+
+\subsection{Conservative interpolation}
+
+For precipitation, it is more common to use first order conservative interpolation, as this method keeps the integral value over the entire grid constant. This interpolation is computed as the weighted mean of the old grid values, in which the weight is equal to the fraction of the area of the new grid cell, which is covered by the old grid cell. This is a more simple form of interpolation, and can therefore lead to larger interpolation errors, but contrary to bilinear interpolation conserves the total mass of precipitation in a defined area.
+
+\subsection{Dynamical downscaling}
+
+Diving into the more advanced methods; \gls{ddm} is the type of \gls{downscaling} used for the \gls{hclim} model \cite{hclim}. This is the current standard, and uses a heavily physics-based numerical estimation of the system to sample climate data at a higher resolution.
+
+Although understanding the exact inner workings of the \gls{hclim} model is far beyond the scope of this project, here is a small summary. 
+In general, a \gls{ddm} uses the coarse data from a \gls{gcm} as input. More specifically it takes the \gls{gcm} data from the edge of the \gls{ddm} domain and uses as "boundary conditions". It combines the boundary conditions with high-resolution static variables and simulates the physics of the atmosphere in small temporal steps. At each step asking the question; "Given the current forces and masses how would the air move? Would the water freeze, thaw, evaporate, or condense? And where does the energy go? The model is constrained on the physical laws of thermodynamics and Newtonian mechanics. 
+
+\subsection{Statistical downscaling}
+
+The last and most recent methods stem from "statistical \gls{downscaling}", which are the data-based models. These types often use a machine learning scheme to learn \gls{downscaling} from previous \gls{ddm} data. While some \glspl{sdm} incorporate a physics-based approach, the main function is learned \cite{marie}. Opposite the \glspl{ddm}, the \glspl{sdm} are not constrained by any physical laws and can usually produce the output they seem fit.
+
+Further in this thesis, the goal is to explore how \glspl{sdm} can produce similar results to \glspl{ddm}, and if they capture the same defining climate factors.
 
 \section{Convolutional Neural Networks}
+
+A standard method in machine learning-based image processing is a convolution. A convolution is a kernel based function which takes a two functions as input and returns one function. The compute the output function the convolution reverses one of the functions (mirror on the y-axis) and slides it across the other, computing the integral between the two at each point. Mathematically, it is defined as:
+\begin{equation}
+    (f * g)(t) = \int_{-\infty}^{\infty}f(\tau)g(t-\tau)d\tau
+\end{equation}
+In other, and perhaps simpler, terms the convolution can be described as the weighted running mean of the function $f$, where the weight is defined as $g(-\tau)$.
+
+In computer science, and more specifically in signal and image processing the convolution is used to apply filters to data. If $f$ is some input data that needs filtering $g$ can be a filter defined to enhance some feature of the data. A common filter, used in image processing, is the edge detection filter:
+\begin{equation}
+    g(t) = 
+    \begin{bmatrix}
+        +1 & 0 & -1 \\
+        +2 & 0 & -2 \\
+        +1 & 0 & -1
+    \end{bmatrix}
+\end{equation}
+Which enhances features on the left side of the filter and reduces features on the right. In the case that there is a large difference between the values on the left and right sides, i.e. an edge, the filter creates a high output. If the values on either side are similar, they cancel out and create a low output. This is just one example, but the application might be anything from denoising, to feature extraction, and segmentation. It is only limited by the ability to design proper filters for the task. That is where machine learning comes in.
+
+Instead of manually designing filters, they can be learned. Imagine the above edge detection filter, but instead each value is replaced by a learnable parameter. Given a specific task, and some data to learn from, the machine learning model can determine the best possible filter values for the task on the given data. This type of model is called a convolutional neural network, or CNN for short.
+
+CNN's are great at making filters for different tasks, but in machine learning, the desired output is rarely a filter, but instead some representation of the data, which enhances the needed features. This can be achieved by chaining together more layers of convolutions. In each layer, the spatial dimension is reduced (based on the size of the filter) while the channel dimension can be increased (by having more filters for each existing channel). This allows the model to essentially embed the data on a high-dimensional vector space rather than a spatial grid. This architecture is called an encoder, and is perhaps one of the most common CNN-types. It is often paired with a decoder, which uses the same operation, but in reverse, to decode the embedding vector back to the original spatial grid. The encoder-decoder combination creates the backbone of most common CNN architectures like the UNet \cite{unet}, ResNet \cite{resnet}, and the VAE \cite{vae}. 
+
+Further in this thesis, the backbone model will be a modification of the UNet implementation.
 
 \section{Diffusion Models}
 
@@ -62,7 +118,7 @@ To make matters easier down the line, the Markov chain can help simplify this te
 \end{equation}
 The term will be needed to derive the sampling strategy.
 
-Let's borrow a trick from the world of variational auto-encoders, namely the Evidence Lower-Bound (ELBO) loss function as introduced in \cite{vae-intro} (and used in eq. 3 in \cite{ddpm}):
+Let's borrow a trick from the world of variational auto-encoders, namely the Evidence Lower-Bound (ELBO) loss function as introduced in \cite{vae} (and used in eq. 3 in \cite{ddpm}):
 \begin{equation} \label{eq:elbo}
     -\log \pt (X_0) \leq \mathbb{E}_{q(X_{1:T}|X_0)} \left[ -\log \frac{q(X_t) \prod_{t=1}^T \pt (X_{t-1}|X_t)}{\prod_{t=1}^T q(X_t|X_{t-1})} \right] =: \mathcal{L}
 \end{equation}
@@ -174,11 +230,11 @@ An important part of the sampling process of the DDPM is the extra noise added (
 
 From a machine learning perspective, this is a marvellous trait. It allows the model to generate several estimations of the same system, drawn from the same distribution. So even though the diffusion model isn't inherently probabilistic model, the parametrization can be estimated with the Monte Carlo method.
 
-\section{Intuition of the diffusion process}
+\subsection{Intuition of the diffusion process}
 
-Mathematics and probability theory is all fun and games, but can we map the above derivations to an intuitive understanding of the generative process? This is my best...
+Mathematics and probability theory is good for precise definition, but can we map the above derivations to an intuitive understanding of the generative process? This is my best...
 
-Jumping back to the cup of coffee with milk I mentioned in the beginning of the chapter. Let's map the mixing of milk and coffee to a discrete time series; one measurement every millisecond, or whatever floats your boat. The model learns by looking at these time-slices of the mixing process. One millisecond the milk is separate from coffee, the next they are slightly mixed, and so on. The model thinks to itself; "For the milk to get from here (in time-step 0) to here (in time-step 1) how did the milk move?" To answer this question, it begins to model a probability distribution, for each drop of milk in the cup, what is the probability that it moved in a certain direction. Now, let's repeat this in the next time-step, and the next, and so on. Every time looking at how the milk droplets moved from step 0 to the current step.
+Jumping back to the cup of coffee with milk mentioned in the beginning of the chapter. Let's map the mixing of milk and coffee to a discrete time series, e.g; one measurement every millisecond. The model learns by looking at the time-slices of the mixing process. One millisecond the milk is separate from coffee, the next they are slightly mixed, and so on. The model ask the question; "For the milk to get from here (in time-step 0) to here (in time-step 1) how did the milk move?" To answer this question, it begins to model a probability distribution, for each drop of milk in the cup, what is the probability that the drop moved in a certain direction. Now, let's repeat this in the next time-step, and the next, and so on. Every time looking at how the milk droplets moved from step 0 to the current step.
 In the end, this yields a set of distributions corresponding to the number of time-steps, where each distribution has a dimensionality corresponding to the number of droplets of milk in the cup, and each point in the distribution mapping a probability of a direction this droplet moved to end up here. Theoretically, if the model looks at enough of these scenarios, perhaps from different cups of coffee, the milk distribution will correctly model how the milk mixes into the coffee at each step. We call this distribution the "likelihood-distribution".
 
 With a perfectly learned likelihood distribution, "unstirring" the milk will be a cake-walk. Let's assume we have a cup of coffee were the milk is completely mixed with the coffee. You made it 2 hours ago, stirred in the cold milk with one of those disposable wooden spatulas, forgot to bring it to your meeting, and now is just sitting there cold, stirred, and sad. Luckily, this is the exact state your model desires. You ask the model, if I ignored the most basic laws of chemical bonds, how would I move the milk droplets in this cup to unstir it; not all the way, just turning time back one millisecond. Together, you look at the likelihood-distribution for the last step. For each droplet of milk, you can see, what direction would maximize the probability (i.e. the likelihood) of a "clean" cup of coffee. You then move the droplets accordingly and review the new state of the cup. You review the likelihood-distribution for T-1, move droplets and asses. As you move towards t=0 the milk droplets clump together more and more until they finally separate from the coffee completely. This is the denoising diffusion process.
