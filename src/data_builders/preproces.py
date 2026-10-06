@@ -7,15 +7,17 @@ config_path = '/users/haackesk/Desktop/sirius/src/configs/sample_config.toml'
 date_config = parse_config(config_path=config_path, config_keyword="dates")
 preprocessing_config = parse_config(config_path=config_path, config_keyword="preprocessing")
 predictor_config = parse_config(config_path=config_path, config_keyword="predictors")
+regridded_predictor_config = parse_config(config_path=config_path, config_keyword="regridded")
 static_features_config = parse_config(config_path=config_path, config_keyword="static_features")
 target_config = parse_config(config_path=config_path, config_keyword="targets")
 
 data_builder = ClimateDataBuilder(
-    date_config,
-    preprocessing_config,
-    predictor_config, 
-    static_features_config, 
-    target_config
+    date_config=date_config,
+    preprocessing_config=preprocessing_config,
+    predictor_config=predictor_config,
+    regridded_predictor_config=regridded_predictor_config,
+    static_features_config=static_features_config,
+    target_config=target_config
 )
 
 data_builder.build_training_set()

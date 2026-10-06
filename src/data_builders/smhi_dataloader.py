@@ -21,12 +21,14 @@ class ClimateDataBuilder:
         date_config,
         preprocessing_config,
         predictor_config,
+        regridded_predictor_config=None,
         static_features_config=None,
         target_config=None
     ):
         self.date_config = date_config
         self.preprocessing_config = preprocessing_config
         self.predictor_config = predictor_config
+        self.regridded_predictor_config = regridded_predictor_config
         self.static_features_config = static_features_config
         self.target_config = target_config
         
@@ -44,6 +46,31 @@ class ClimateDataBuilder:
         timesteps_per_chunk = 'auto' # Seems to be optimal for preprocessing
         vertical_dim_name = self.predictor_config["vertical_dim_name"]
         for source_name, source_config in self.predictor_config["source"].items():
+            for scenario_name, scenario_config in source_config["scenario"].items():
+                for member_name, member_config in scenario_config["member"].items():
+                    basepath = member_config["basepath"]
+                    files = member_config["files"]
+                    mode = member_config["mode"]
+                    ds = merge_dataset(
+                        basepath, 
+                        files, 
+                        mode,
+                        timesteps_per_chunk,
+                        vertical_dim_name
+                    )
+                    realization_id = f"{source_name}|{scenario_name}|{member_name}"
+                    ds = ds.expand_dims(realization=[realization_id])
+                    ds = self._normalize_time(ds)
+                    datasets.append(ds)
+                    
+        return datasets
+    
+    def load_regridded_predictors(self):
+        datasets = []
+        #timesteps_per_chunk = self.preprocessing_config.get("timesteps_per_chunk")
+        timesteps_per_chunk = 'auto' # Seems to be optimal for preprocessing
+        vertical_dim_name = self.regridded_predictor_config["vertical_dim_name"]
+        for source_name, source_config in self.regridded_predictor_config["source"].items():
             for scenario_name, scenario_config in source_config["scenario"].items():
                 for member_name, member_config in scenario_config["member"].items():
                     basepath = member_config["basepath"]
@@ -159,6 +186,22 @@ class ClimateDataBuilder:
         else:
             print(f'No precipitation preprocessing applied.')
 
+    def _residualize_targets(self):
+        if self.targets is None:
+            print("No targets provided, skipping residualization.")
+            return
+        
+        if self.preprocessing_config["residualize_targets"]:
+            regridded_predictors = self.load_regridded_predictors()
+            regridded_predictors = xr.concat(
+                [regridded.squeeze("realization", drop=True) for regridded in regridded_predictors],
+                dim='time'
+            )
+            for var in self.targets.data_vars:
+                self.targets[var] = self.targets[var] - regridded_predictors[var]
+        else:
+            print("Residualization of targets is disabled.")
+            
     def _get_global_stats(self):
         path = self.preprocessing_config["normalization_stats_path"]
         if os.path.isfile(path):
@@ -170,6 +213,7 @@ class ClimateDataBuilder:
 
         print(f"Computing global stats from the training predictors...")
         predictors_training = self.predictors.isel(time=self.train_idx)
+        targets_training = self.targets.isel(time=self.train_idx)
         
         stats = xr.Dataset(
             {
@@ -177,9 +221,12 @@ class ClimateDataBuilder:
                     [
                         predictors_training[var].mean(),
                         predictors_training[var].std(),
+                        targets_training[var].mean() if var in targets_training.data_vars else xr.DataArray(np.nan),
+                        targets_training[var].std()  if var in targets_training.data_vars else xr.DataArray(np.nan),
                     ],
                     dim="statistic",
-                ).assign_coords(statistic=["mean", "std"])
+                    coords="minimal",
+                ).assign_coords(statistic=["pred_mean", "pred_std", "targ_mean", "targ_std"])
                 for var in predictors_training.data_vars
             }
         )
@@ -191,12 +238,14 @@ class ClimateDataBuilder:
 
     def _global_standardization(self):
         excluded = {"pr_mask"}
-        means = xr.Dataset({var: self.stats[var].sel(statistic="mean") for var in self.stats.data_vars})
-        stds  = xr.Dataset({var: self.stats[var].sel(statistic="std") for var in self.stats.data_vars})
+        means = xr.Dataset({var: self.stats[var].sel(statistic="pred_mean") for var in self.stats.data_vars})
+        stds  = xr.Dataset({var: self.stats[var].sel(statistic="pred_std") for var in self.stats.data_vars})
 
         self.predictors = (self.predictors - means) / stds
 
         if self.targets is not None:
+            means = xr.Dataset({var: self.stats[var].sel(statistic="targ_mean") for var in self.stats.data_vars})
+            stds  = xr.Dataset({var: self.stats[var].sel(statistic="targ_std") for var in self.stats.data_vars})
             target_vars = [var for var in self.targets.data_vars if var not in excluded]
     
             missing = set(target_vars) - set(self.predictors.data_vars)
@@ -231,6 +280,7 @@ class ClimateDataBuilder:
     def preprocessing(self):
         self._apply_temperature_constraints()
         self._precipitation_preprocessing()
+        self._residualize_targets()
         self._check_static_alignment()
         self._scale_static_features()
         if self.preprocessing_config["normalization"] == 'global':
@@ -293,12 +343,6 @@ class ClimateDataBuilder:
 
         print(f"Preprocessing the data...")
         self.preprocessing()
-
-        print("Training indices...... again:")
-        print("shape", train_idx.shape)
-        print("max", train_idx.max())
-        print("min", train_idx.min())
-        print("blocks", self.date_config["train_blocks"])
 
     def build_inference_set(self):
         print(f"Loading predictors...")

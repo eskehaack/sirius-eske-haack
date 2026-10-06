@@ -29,6 +29,7 @@ timesteps_per_chunk = 8
 temperature_constraints = false
 precipitation_scaling = 86400
 precipitation_transform = false
+residualize_targets = true
 wet_day_threshold = 0.5
 normalization = 'global'
 normalization_stats_path = '/scratch/project_465002687/ec_earth/sample/normalization_stats.nc'
@@ -40,7 +41,7 @@ static_output = '/scratch/project_465002687/ec_earth/sample/static.zarr'
 vertical_dim_name = "plev"
 
 [predictors.source.EC-Earth3-Veg.scenario.historical.member.r1i1p1f1]
-basepath = "/scratch/project_465002687/ec_earth/predictors/EC-Earth3-Veg/historical/r1i1p1f1"
+basepath = "/scratch/project_465002687/ec_earth/predictors/EC-Earth3-Veg-v2/historical/r1i1p1f1"
 mode = 'single'
 
 [predictors.source.EC-Earth3-Veg.scenario.historical.member.r1i1p1f1.files]
@@ -57,7 +58,7 @@ clt = "clt_EUR-12_day_EC-Earth3-Veg_historical_r1i1p1f1_r360x180_1951-2014.nc"
 psl = "psl_EUR-12_day_EC-Earth3-Veg_historical_r1i1p1f1_r360x180_1951-2014.nc"
 
 [predictors.source.EC-Earth3-Veg.scenario.ssp126.member.r1i1p1f1]
-basepath = "/scratch/project_465002687/ec_earth/predictors/EC-Earth3-Veg/ssp126/r1i1p1f1"
+basepath = "/scratch/project_465002687/ec_earth/predictors/EC-Earth3-Veg-v2/ssp126/r1i1p1f1"
 mode = 'single'
 
 [predictors.source.EC-Earth3-Veg.scenario.ssp126.member.r1i1p1f1.files]
@@ -74,7 +75,7 @@ clt = "clt_EUR-12_day_EC-Earth3-Veg_ssp126_r1i1p1f1_r360x180_2015-2100.nc"
 psl = "psl_EUR-12_day_EC-Earth3-Veg_ssp126_r1i1p1f1_r360x180_2015-2100.nc"
 
 [predictors.source.EC-Earth3-Veg.scenario.ssp370.member.r1i1p1f1]
-basepath = "/scratch/project_465002687/ec_earth/predictors/EC-Earth3-Veg/ssp370/r1i1p1f1"
+basepath = "/scratch/project_465002687/ec_earth/predictors/EC-Earth3-Veg-v2/ssp370/r1i1p1f1"
 mode = 'single'
 
 [predictors.source.EC-Earth3-Veg.scenario.ssp370.member.r1i1p1f1.files]
@@ -89,6 +90,39 @@ hus = "hus_EUR-12_day_EC-Earth3-Veg_ssp370_r1i1p1f1_r360x180_2015-2100.nc"
 #zg = "zg_EUR-12_day_EC-Earth3-Veg_ssp370_r1i1p1f1_r360x180_2015-2100.nc"
 clt = "clt_EUR-12_day_EC-Earth3-Veg_ssp370_r1i1p1f1_r360x180_2015-2100.nc"
 psl = "psl_EUR-12_day_EC-Earth3-Veg_ssp370_r1i1p1f1_r360x180_2015-2100.nc"
+
+[regridded]
+vertical_dim_name = "plev"
+
+[regridded.source.EC-Earth3-Veg.scenario.historical.member.r1i1p1f1]
+basepath = "/scratch/project_465002687/ec_earth/predictors/regridded/historical/r1i1p1f1"
+mode = 'single'
+
+[regridded.source.EC-Earth3-Veg.scenario.historical.member.r1i1p1f1.files]
+tas = "tas_EUR-12_day_EC-Earth3-Veg_historical_r1i1p1f1_regridded.nc"
+tasmin = "tasmin_EUR-12_day_EC-Earth3-Veg_historical_r1i1p1f1_regridded.nc"
+tasmax = "tasmax_EUR-12_day_EC-Earth3-Veg_historical_r1i1p1f1_regridded.nc"
+pr = "pr_EUR-12_day_EC-Earth3-Veg_historical_r1i1p1f1_regridded.nc"
+
+[regridded.source.EC-Earth3-Veg.scenario.ssp126.member.r1i1p1f1]
+basepath = "/scratch/project_465002687/ec_earth/predictors/regridded/ssp126/r1i1p1f1"
+mode = 'single'
+
+[regridded.source.EC-Earth3-Veg.scenario.ssp126.member.r1i1p1f1.files]
+tas = "tas_EUR-12_day_EC-Earth3-Veg_ssp126_r1i1p1f1_regridded.nc"
+tasmin = "tasmin_EUR-12_day_EC-Earth3-Veg_ssp126_r1i1p1f1_regridded.nc"
+tasmax = "tasmax_EUR-12_day_EC-Earth3-Veg_ssp126_r1i1p1f1_regridded.nc"
+pr = "pr_EUR-12_day_EC-Earth3-Veg_ssp126_r1i1p1f1_regridded.nc"
+
+[regridded.source.EC-Earth3-Veg.scenario.ssp370.member.r1i1p1f1]
+basepath = "/scratch/project_465002687/ec_earth/predictors/regridded/ssp370/r1i1p1f1"
+mode = 'single'
+
+[regridded.source.EC-Earth3-Veg.scenario.ssp370.member.r1i1p1f1.files]
+tas = "tas_EUR-12_day_EC-Earth3-Veg_ssp370_r1i1p1f1_regridded.nc"
+tasmin = "tasmin_EUR-12_day_EC-Earth3-Veg_ssp370_r1i1p1f1_regridded.nc"
+tasmax = "tasmax_EUR-12_day_EC-Earth3-Veg_ssp370_r1i1p1f1_regridded.nc"
+pr = "pr_EUR-12_day_EC-Earth3-Veg_ssp370_r1i1p1f1_regridded.nc"
 
 [static_features]
 basepath = "/scratch/project_465002687/ec_earth/predictors/static_features"
