@@ -1,16 +1,18 @@
 % Primary papers
 
-@misc{ddpm,
-    title={Denoising Diffusion Probabilistic Models}, 
-    author={Jonathan Ho and Ajay Jain and Pieter Abbeel},
-    year={2020},
-    eprint={2006.11239},
-    archivePrefix={arXiv},
-    primaryClass={cs.LG},
-    url={https://arxiv.org/abs/2006.11239}, 
+@article{ddpm,
+  author = {Ho, Jonathan and Jain, Ajay and Abbeel, Pieter},
+  title = {Denoising diffusion probabilistic models},
+  format = {article},
+  journal = {Advances in Neural Information Processing Systems},
+  volume = {2020-},
+  year = {2020},
+  issn = {10495258},
+  publisher = {Neural information processing systems foundation},
+  keywords = "main"
 }
 
-@Article{tomasi,
+@article{tomasi,
     AUTHOR = {Tomasi, E. and Franch, G. and Cristoforetti, M.},
     TITLE = {Can AI be enabled to perform dynamical downscaling? A latent diffusion model to mimic kilometer-scale COSMO5.0\_CLM9 simulations},
     JOURNAL = {Geoscientific Model Development},
@@ -19,7 +21,36 @@
     NUMBER = {6},
     PAGES = {2051--2078},
     URL = {https://gmd.copernicus.org/articles/18/2051/2025/},
-    DOI = {10.5194/gmd-18-2051-2025}
+    DOI = {10.5194/gmd-18-2051-2025},
+    keywords = "main"
+}
+
+@article{hclim,
+  author = {Lindstedt, David and Lind, Petter and Kjellström, Erik and Jones, Colin},
+  title = {A new regional climate model operating at the meso-gamma scale: Performance over Europe},
+  language = {eng},
+  format = {article},
+  journal = {Tellus, Series A: Dynamic Meteorology and Oceanography},
+  volume = {67},
+  number = {1},
+  pages = {24138},
+  year = {2015},
+  issn = {16000870, 02806495},
+  publisher = {Stockholm University Press},
+  doi = {10.3402/tellusa.v67.24138},
+  keywords = "main"
+}
+
+@article{sr-diffusion,
+  author={Saharia, Chitwan and Ho, Jonathan and Chan, William and Salimans, Tim and Fleet, David J. and Norouzi, Mohammad},
+  journal={IEEE Transactions on Pattern Analysis and Machine Intelligence}, 
+  title={Image Super-Resolution via Iterative Refinement}, 
+  year={2023},
+  volume={45},
+  number={4},
+  pages={4713-4726},
+  doi={10.1109/TPAMI.2022.3204461},
+  keywords = "main"
 }
 
 % Secondary references
@@ -31,7 +62,8 @@
   lccn={2009289249},
   url={https://books.google.dk/books?id=8uGOnjRGEzoC},
   year={2008},
-  publisher={Prentice Hall}
+  publisher={Prentice Hall},
+  keywords = "secondary"
 }
 
 @misc{universal-guidance,
@@ -42,6 +74,7 @@
       archivePrefix={arXiv},
       primaryClass={cs.CV},
       url={https://arxiv.org/abs/2302.07121}, 
+      keywords = "secondary"
 }
 
 @misc{cfg-diffusion,
@@ -52,6 +85,7 @@
       archivePrefix={arXiv},
       primaryClass={cs.LG},
       url={https://arxiv.org/abs/2207.12598}, 
+      keywords = "secondary"
 }
 
 @inproceedings{gan,
@@ -63,17 +97,8 @@
  title = {Generative Adversarial Nets},
  url = {https://proceedings.neurips.cc/paper_files/paper/2014/file/f033ed80deb0234979a61f95710dbe25-Paper.pdf},
  volume = {27},
- year = {2014}
-}
-
-@misc{sr-diffusion,
-      title={Image Super-Resolution via Iterative Refinement}, 
-      author={Chitwan Saharia and Jonathan Ho and William Chan and Tim Salimans and David J. Fleet and Mohammad Norouzi},
-      year={2021},
-      eprint={2104.07636},
-      archivePrefix={arXiv},
-      primaryClass={eess.IV},
-      url={https://arxiv.org/abs/2104.07636}, 
+ year = {2014},
+ keywords = "secondary"
 }
 
 @misc{org-diffusion,
@@ -84,16 +109,50 @@
       archivePrefix={arXiv},
       primaryClass={cs.LG},
       url={https://arxiv.org/abs/1503.03585}, 
+      keywords = "secondary"
 }
 
-@misc{vae-intro,
-      title={Auto-Encoding Variational Bayes}, 
-      author={Diederik P Kingma and Max Welling},
-      year={2022},
-      eprint={1312.6114},
-      archivePrefix={arXiv},
-      primaryClass={stat.ML},
-      url={https://arxiv.org/abs/1312.6114}, 
+@InProceedings{unet,
+    author="Ronneberger, Olaf
+    and Fischer, Philipp
+    and Brox, Thomas",
+    editor="Navab, Nassir
+    and Hornegger, Joachim
+    and Wells, William M.
+    and Frangi, Alejandro F.",
+    title="U-Net: Convolutional Networks for Biomedical Image Segmentation",
+    booktitle="Medical Image Computing and Computer-Assisted Intervention -- MICCAI 2015",
+    year="2015",
+    publisher="Springer International Publishing",
+    address="Cham",
+    pages="234--241",
+    isbn="978-3-319-24574-4",
+    keywords = "secondary"
+}
+
+@InProceedings{resnet,
+      author={He, Kaiming and Zhang, Xiangyu and Ren, Shaoqing and Sun, Jian},
+      booktitle={2016 IEEE Conference on Computer Vision and Pattern Recognition (CVPR)}, 
+      title={Deep Residual Learning for Image Recognition}, 
+      year={2016},
+      volume={},
+      number={},
+      pages={770-778},
+      doi={10.1109/CVPR.2016.90},
+      keywords = "secondary"
+}
+
+@article{vae, 
+    volume={2},  
+    url={https://ceasjournal.com/index.php/CEAS/article/view/33},  
+    title={Auto-Encoding Variational Bayes},
+    author={Diederik P Kingma and Max Welling},
+    DOI={10.61603/ceas.v2i1.33}, 
+    number={1}, 
+    journal={Cambridge Explorations in Arts and Sciences}, 
+    year={2024}, 
+    month={2},
+    keywords = "secondary"
 }
 
 %% Introduction
@@ -102,7 +161,8 @@
       title={State of the Global Climate 2025}, 
       author={World Meteorological Organization (WMO)},
       year={2025},
-      doi={https://doi.org/10.59327/WMO/S/CRI/SOC1}
+      doi={https://doi.org/10.59327/WMO/S/CRI/SOC1},
+      keywords = "secondary"
 }
 
 @article{precip-temp-downscaling-cnn,
@@ -114,7 +174,8 @@
     pages = {e2020WR029308},
     keywords = {deep learning, downscaling, precipitation, temperature},
     doi = {https://doi.org/10.1029/2020WR029308},
-    year = {2021}
+    year = {2021},
+    keywords = "secondary"
 }
 
 @article{precip-downscaling,
@@ -125,7 +186,8 @@
     number = {3},
     keywords = {precipitation, dynamical downscaling, statistical downscaling, climate change},
     doi = {https://doi.org/10.1029/2009RG000314},
-    year = {2010}
+    year = {2010},
+    keywords = "secondary"
 }
 
 
@@ -134,14 +196,16 @@
       author={Petter Lind and Danijel Belušić and Erika Médus and Andreas Dobler and Rasmus A. Pedersen and Fuxing Wang and Dominic Matte and Erik Kjellström and Oskar Landgren and David Lindstedt and Ole B. Christensen and Jens H. Christensen },
       year={2022},
       publisher={Springer},
-      doi={https://doi.org/10.1007/s00382-022-06589-3}
+      doi={https://doi.org/10.1007/s00382-022-06589-3},
+      keywords = "secondary"
 }
 
 @misc{icyalert-article,
     title={IcyAlert: New warning system aims to predict ice-free Arctic summers},
     year={2025},
     author={Hanne Kokkegård},
-    url={https://www.compute.dtu.dk/newsarchive/2025/06/icyalert-new-warning-system-aims-to-predict-ice-free-arctic-summers}
+    url={https://www.compute.dtu.dk/newsarchive/2025/06/icyalert-new-warning-system-aims-to-predict-ice-free-arctic-summers},
+    keywords = "secondary"
 }
 
 @thesis{marie,
@@ -150,7 +214,8 @@
   language = {und},
   format = {thesis},
   year = {2026},
-  publisher = {DTU Department of Applied Mathematics and Computer Science}
+  publisher = {DTU Department of Applied Mathematics and Computer Science},
+  keywords = "secondary"
 }
 
 @article{dynamical-downscaling,
@@ -165,7 +230,8 @@
   year = {2025},
   issn = {10916490, 00278424},
   publisher = {National Academy of Sciences},
-  doi = {10.1073/pnas.2420288122}
+  doi = {10.1073/pnas.2420288122},
+  keywords = "secondary"
 }
 
 @article{review-ml-downscaling,
@@ -175,7 +241,8 @@
   format = {article},
   journal = {Preprints.org},
   year = {2025},
-  doi = {10.20944/preprints202511.1538.v1}
+  doi = {10.20944/preprints202511.1538.v1},
+  keywords = "secondary"
 }
 
 @article{review-ml-downscaling-resnet,
@@ -187,7 +254,8 @@
   pages = {1-6},
   year = {2026},
   publisher = {IEEE},
-  doi = {10.1109/Geoinformatics72247.2026.11665445}
+  doi = {10.1109/Geoinformatics72247.2026.11665445},
+  keywords = "secondary"
 }
 
 @article{temp-downscaling-rnn,
@@ -199,7 +267,8 @@
     pages = {953-972},
     keywords = {CMIP6, deep learning, downscaling, Indo-Gangetic Plain, temperature},
     doi = {https://doi-org.proxy.findit.cvt.dk/10.1002/joc.8366},
-    year = {2024}
+    year = {2024},
+    keywords = "secondary"
 }
 
 
