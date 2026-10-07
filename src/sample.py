@@ -174,9 +174,12 @@ def main(
     np.save(out_dir / "res_prediction.npy", res_prediction.numpy())
     np.save(out_dir / "abs_prediction.npy", abs_prediction.numpy())
 
-    fig = plot_predictions(abs_prediction, data["targets"], date=date)
-    fig.savefig(out_dir / "diagnostics.png", dpi=150, bbox_inches="tight")
-    plt.close(fig)
+    plot_predictions(
+        abs_prediction, 
+        data["targets"], 
+        date=date, 
+        output_path=out_dir / "prediction_diagnostics.png"
+    )
 
 
 def parse_args():

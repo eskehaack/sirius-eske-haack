@@ -15,6 +15,8 @@ Usage:
     fig, ax = plt.subplots()
     ax.plot(x, y, color=COLORS["blue"])
 """
+import cartopy.crs as ccrs
+import cartopy.feature as cfeature
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -66,12 +68,13 @@ FONT_FAMILY = "serif"
 USE_LATEX   = False          # set False if LaTeX is not installed on your machine
 
 FONT_SIZES = {
-    "title":       18,
-    "axis_label":  12,
-    "tick_label":   9,
-    "legend":       9,
-    "annotation":   8,
-    "caption":      8,
+    "suptitle":     2,  # figure-level title (fig.suptitle)
+    "title":        2,   # axes-level title (ax.set_title)
+    "axis_label":   2,   # x/y axis labels
+    "tick_label":   2,   # tick labels
+    "legend":       2,
+    "annotation":   2,
+    "caption":      2,
 }
 
 # ── Format ────────────────────────────────────────────────────────────────────
@@ -86,9 +89,9 @@ PDF_MODE = False
 
 GOLDEN = 1.618
 
-FULL_WIDTH  = 5.90   # inches  ≈ 15.0 cm  (common single-column text width)
-HALF_WIDTH  = 2.87   # inches  ≈  7.3 cm  (two figures side-by-side)
-FULL_HEIGHT = FULL_WIDTH / GOLDEN   # ≈ 3.65 in — good default
+FULL_WIDTH  = 16
+HALF_WIDTH  = 7.5
+FULL_HEIGHT = FULL_WIDTH / GOLDEN 
 
 # Convenience tuples
 FIG_FULL  = (FULL_WIDTH, FULL_HEIGHT)   # standard single figure
@@ -118,6 +121,7 @@ def setup(use_latex: bool = USE_LATEX) -> None:
         # ── Font ──────────────────────────────────────────────────────────────
         "font.family":          FONT_FAMILY,
         "font.size":            FONT_SIZES["tick_label"],
+        "figure.titlesize":     FONT_SIZES["suptitle"],
         "axes.titlesize":       FONT_SIZES["title"],
         "axes.labelsize":       FONT_SIZES["axis_label"],
         "xtick.labelsize":      FONT_SIZES["tick_label"],
@@ -129,13 +133,14 @@ def setup(use_latex: bool = USE_LATEX) -> None:
         "axes.prop_cycle": mpl.cycler(color=PALETTE),
 
         # ── Figure ────────────────────────────────────────────────────────────
-        "figure.figsize":       FIG_FULL,
+        "figure.figsize":       (*FIG_FULL,"cm"),
         "figure.dpi":           150,        # screen preview quality
-        "savefig.dpi":          300,        # output quality
-        "savefig.format":       "pdf",
+        "savefig.dpi":          100,        # output quality
+        "savefig.format":       "png" if not PDF_MODE else "pdf",
         "savefig.bbox":         "tight",
         "savefig.pad_inches":   0.05,
         "figure.facecolor":     COLORS["background"],
+        "figure.layout":        "constrained",
 
         # ── Axes ──────────────────────────────────────────────────────────────
         "axes.facecolor":       COLORS["background"],
@@ -174,6 +179,10 @@ def setup(use_latex: bool = USE_LATEX) -> None:
         "ytick.major.width":    0.8,
         "xtick.minor.visible":  False,
         "ytick.minor.visible":  False,
+
+        # ── Colorbar ──────────────────────────────────────────────────────────
+        "colorbar.fraction":    0.02,
+        "colorbar.pad":         0.04,
     })
 
 
@@ -193,6 +202,16 @@ def save(fig: plt.Figure, path: str, **kwargs) -> None:
         path = path + f".{formatting}"
     fig.savefig(path, format=formatting, **kwargs)
     print(f"  → saved {path}")
+
+def plot_map(ax, data, coords, norm, cmap, title):
+    data_crs = ccrs.PlateCarree()
+    lat, lon = coords
+    im = ax.pcolormesh(lon, lat, data, transform=data_crs, cmap=cmap, norm=norm)
+    ax.add_feature(cfeature.COASTLINE, linewidth=0.8) 
+    ax.gridlines()
+    ax.set_aspect("auto")
+    ax.set_title(title, fontsize=FONT_SIZES["title"])
+    return im
 
 
 def label_bars(ax: plt.Axes, fmt: str = "{:.2f}", padding: float = 0.01) -> None:

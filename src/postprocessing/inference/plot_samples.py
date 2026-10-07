@@ -60,6 +60,7 @@ def plot_predictions(
     prediction: torch.Tensor | np.ndarray,
     targets: xr.Dataset,
     date: str = "",
+    output_path: str | None = None
 ) -> plt.Figure:
     """
     Plot ground truth, ensemble mean, ensemble std, and absolute error
@@ -198,6 +199,9 @@ def plot_predictions(
                 va="top", ha="left",
                 color="black",
             )
+    if output_path:
+        pg.save(fig, output_path)
+        plt.close(fig)
 
     return fig
 
