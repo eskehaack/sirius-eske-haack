@@ -4,10 +4,10 @@
 #SBATCH --partition=small-g
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --cpus-per-task=1
+#SBATCH --cpus-per-task=5
 #SBATCH --gpus-per-task=1
 #SBATCH --mem=32G
-#SBATCH --time=02:00:00
+#SBATCH --time=08:00:00
 #SBATCH --output=./hpc_outputs/%x-%j.out
 #SBATCH --error=./hpc_outputs/%x-%j.err
 
@@ -49,7 +49,7 @@ amd-smi version
 # --------------------------------------------------
 
 cd "/users/haackesk/Desktop/sirius/"
-SIF="/scratch/project_465002687/ec_earth/containers/docker.sif"
+SIF="/scratch/project_465002687/ec_earth/containers/dockerv4.sif"
 
 srun --account=project_465002687 singularity exec \
     --bind /scratch/project_465002687/ec_earth:/scratch/project_465002687/ec_earth \
@@ -62,4 +62,5 @@ srun --account=project_465002687 singularity exec \
     --bind /scratch/project_465002687/ec_earth:/scratch/project_465002687/ec_earth \
     "$SIF" \
     python -m src.sample \
-        --run_id "$SLURM_JOB_ID"
+        --run_id "$SLURM_JOB_ID" \
+        --date "1970-01-01"

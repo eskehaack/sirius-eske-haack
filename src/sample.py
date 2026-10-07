@@ -1,14 +1,16 @@
 import argparse
 from pathlib import Path
-import time
+import toml
 
-import matplotlib.pyplot as plt
-import numpy as np
+import xarray as xr
 import torch
 import torch.nn.functional as F
+import numpy as np
+import matplotlib.pyplot as plt
 
 from src.model import LitConditionalDDPM
-from src.data_builders.dataloader import DataModule
+from src.data_builders.data_utils import load_sample
+from src.postprocessing.inference.plot_samples import plot_predictions
 
 def load_checkpoint(run_id: str, checkpoint: str = "last") -> LitConditionalDDPM:
     # ----------------------------------------------------
@@ -26,257 +28,155 @@ def load_checkpoint(run_id: str, checkpoint: str = "last") -> LitConditionalDDPM
     model.to(device)
     return model
 
-def load_data():
-    # ----------------------------------------------------
-    # Load conditioning image
-    # ----------------------------------------------------
-
-    datamodule = DataModule(
-        batch_size=1,
-        num_workers=1,
-    )
-    datamodule.setup()
-    datamodule.data_builder._get_global_stats()
-    stats = datamodule.data_builder.stats
-    if stats is None:
-        raise ValueError("Normalization stats not found.")
-
-    return datamodule
-
-
-def get_interpolated(img_size, x, static, target) -> tuple[torch.Tensor]:
+def get_resized(img_size, target_shape, x, static) -> tuple[torch.Tensor]:
     # ----------------------------------------------------
     # Match interpolation from training
     # ----------------------------------------------------
 
+    pad_x = (img_size - target_shape[0]) // 2
+    pad_y = (img_size - target_shape[1]) // 2
+    pad_tuple = (pad_y, pad_y, pad_x, pad_x)  # (left, right, top, bottom)
+
+    # Interpolate the condition to match the target shape
     condition = F.interpolate(
         x,
-        size=(img_size, img_size),
+        size=target_shape,
         mode="bilinear",
         align_corners=False,
     )
+    # Then pad to meet model requirements
+    condition = F.pad(
+        condition,
+        pad=pad_tuple,
+        mode="constant",
+        value=0.0,
+    )
 
+    # Interpolate the statics to match the target shape
     static = F.interpolate(
         static,
-        size=(img_size, img_size),
+        size=target_shape,
         mode="bilinear",
         align_corners=False,
     )
-
-    target = F.interpolate(
-        target,
-        size=(img_size, img_size),
-        mode="bilinear",
-        align_corners=False,
+    # Then pad to meet model requirements
+    static = F.pad(
+        static,
+        pad=pad_tuple,
+        mode="constant",
+        value=0.0,
     )
 
-    return torch.cat([condition, static], dim=1), target
+    return torch.cat([condition, static], dim=1), (pad_x, pad_y)
 
-def unnormalize(prediction, target, stats, n_variables):
-    # ----------------------------------------------------
-    # IMPORTANT:
-    # Use EXACTLY the same normalization as training
-    # ----------------------------------------------------
-    stat_tensor = torch.stack([torch.tensor(stat.values) for stat in stats.values()]).T
-    stat_tensor = stat_tensor.to(prediction.device)
-    mean, std = stat_tensor
-    mean = mean[None,:,None,None] # Map to shape 1, channels, 1, 1 for broadcast
-    std = std[None,:,None,None] # Map to shape 1, channels, 1, 1 for broadcast
+def normalize(x, stats):
+    for i, var in enumerate(stats.data_vars):
+        mean = torch.tensor(stats[var].sel(statistic="pred_mean").values).to(x.device)
+        std = torch.tensor(stats[var].sel(statistic="pred_std").values).to(x.device)
+        x[:, i, :, :] = (x[:, i, :, :] - mean) / std
+    return x
 
-    mean_target_vars = mean[:, :n_variables, :, :]
-    std_target_vars = std[:, :n_variables, :, :]
+def unnormalize(prediction, stats, target_vars):
+    for i, var in enumerate(target_vars):
+        mean = torch.tensor(stats[var].sel(statistic="targ_mean").values).to(prediction.device)
+        std = torch.tensor(stats[var].sel(statistic="targ_std").values).to(prediction.device)
+        prediction[:, i, :, :] = prediction[:, i, :, :] * std + mean
+    return prediction
 
-    prediction = prediction * std_target_vars + mean_target_vars
-    target = target * std_target_vars + mean_target_vars
-
-    return prediction, target
-
-def plot_prediction(metrics, variables, scales, out_dir, cbar_labels, ensemble_size):
-    n_vars = len(variables)
-    n_metrics = len(metrics)
-    ensemble_size = ensemble_size
-
-    # Scale figure size with number of variables
-    fig, axes = plt.subplots(
-        n_metrics,
-        n_vars,
-        figsize=(3.5 * n_vars, 3.0 * n_metrics),
-        squeeze=False,
-    )
-
-    fig.suptitle(f"Comparison of Prediction and Ground Truth [Ensemble Size: {ensemble_size}]")
-
-    for i, metric in enumerate(metrics):
-        for j, variable in enumerate(variables):
-            img = metrics[metric][j]
-            vmin, vmax = scales[i][j]
-            ax = axes[i, j]
-
-            mappable = ax.imshow(
-                img,
-                cmap="coolwarm",
-                origin="lower",
-                vmin=vmin,
-                vmax=vmax,
-            )
-
-            # Variable name on top of each column
-            if i == 0:
-                ax.set_title(str(variable), fontsize=12, pad=8)
-
-            ax.axis("off")
-
-            # Small colorbar attached directly to the image
-            cbar = fig.colorbar(
-                mappable,
-                ax=ax,
-                fraction=0.035,
-                pad=0.02,
-                aspect=30,
-            )
-            cbar.set_label(cbar_labels[j][i], fontsize=10)
-
-        # Metric name on the left of each row
-        axes[i, 0].text(
-            -0.25,
-            0.5,
-            str(metric),
-            transform=axes[i, 0].transAxes,
-            rotation=90,
-            va="center",
-            ha="center",
-            fontsize=12,
-        )
-
-    fig.savefig(out_dir / "comparison.png", dpi=300)
-    plt.close(fig)
-
+def unresidualise(regridded, prediction, target_vars):
+    prediction = prediction.clone()  # Avoid modifying the original tensor
+    for ensemble in prediction:
+        for i, var in enumerate(target_vars):
+            ensemble[i, :, :] += torch.tensor(regridded[var].values).to(prediction.device)
+    return prediction
 
 def main(
-    run_id: str, checkpoint: str = "last", ensemble_size: int = 5, load_from_npy: str = None
+    run_id: str, 
+    checkpoint: str = "last", 
+    ensemble_size: int = 5, 
+    scenario: str = "historical",
+    member: str = "r1i1p1f1",
+    date: str = "1951-01-01",
+    config_path: str = "./src/configs/sample_config.toml", 
 ):
 
-    if load_from_npy is not None and Path(load_from_npy).exists():
-        out_dir = Path(load_from_npy)
-        if (out_dir / "prediction.npy").exists() and (out_dir / "target.npy").exists():
-            prediction = torch.from_numpy(np.load(out_dir / "prediction.npy"))
-            target = torch.from_numpy(np.load(out_dir / "target.npy"))
-            print(f"Loaded prediction and target from {out_dir}")
+    out_dir = Path(f"./samples/{run_id}")
+    out_dir = out_dir / f"{scenario}_{member}_{date.replace('-', '')}"
 
-    else:
-        out_dir = Path(f"./samples/{run_id}")
-        out_dir = out_dir / time.strftime("%Y%m%d%H%M%S")
+    model = load_checkpoint(run_id, checkpoint)
+    config = toml.load(config_path)
+    data = load_sample(config, date=date, scenario=scenario, member=member)
 
-        model = load_checkpoint(run_id, checkpoint)
-        datamodule = load_data()
-        x, y, static, idx = next(iter(datamodule.val_dataloader()))
+    def ds_to_channels(ds: xr.Dataset) -> np.ndarray:
+        """
+        Convert a Dataset to a (C, H, W) array.
+        Surface variables (H, W) become 1 channel each.
+        Multi-level variables (plev, H, W) are flattened into plev channels.
+        """
+        channels = []
+        for v in ds.data_vars:
+            arr = ds[v].values  # (H, W) or (plev, H, W)
+            if arr.ndim == 2:
+                channels.append(arr[np.newaxis])  # → (1, H, W)
+            else:
+                channels.append(arr)              # → (plev, H, W)
+        return np.concatenate(channels, axis=0)   # (C_total, H, W)
 
-        # Create Target
-        target = torch.stack(list(y.values()), dim =1)
-        target = target.to(model.device)
-        n_targets = target.shape[1]
-        org_img_shape = target.shape[-2:]
+    # Stack all variables into (1, C, H, W) tensors
+    x = torch.from_numpy(ds_to_channels(data['predictors'])
+    ).unsqueeze(0).float().to(model.device)  # (1, C_pred, H, W)
 
-        condition, target = get_interpolated(model.image_size, x, static, target)
-        condition = condition.to(model.device)
+    static = torch.from_numpy(ds_to_channels(data['static'])
+    ).unsqueeze(0).float().to(model.device)  # (1, C_static, H, W)
 
-        # ----------------------------------------------------
-        # Sample
-        # ----------------------------------------------------
-        with torch.no_grad():
-            prediction = torch.concat([
-                model.sample(
-                    condition,
-                    num_steps=500,
-                )
-                for _ in range(ensemble_size)
-            ], dim=0)
+    target_shape = data['targets']['lon'].shape
+    target_vars = ["tas", "tasmin", "tasmax", "pr"]
 
-        # Undo normalization
-        prediction, target = unnormalize(prediction, target, datamodule.data_builder.stats, n_targets)
 
-        # Interpolate back to original size
-        prediction = F.interpolate(
-            prediction,
-            size=org_img_shape,
-            mode="bilinear",
-            align_corners=False,
-        )
+    stats = xr.open_dataset(config['preprocessing']['normalization_stats_path'])
+    x = normalize(x, stats)
+    condition, (pad_x, pad_y) = get_resized(model.image_size, target_shape, x, static)
+    condition = condition.to(model.device)
 
-        # Interpolate back to original size
-        target = F.interpolate(
-            target,
-            size=org_img_shape,
-            mode="bilinear",
-            align_corners=False,
-        )
-
-        prediction = prediction.cpu()
-        target = target.cpu()
-
-        # ----------------------------------------------------
-        # Save arrays
-        # ----------------------------------------------------
-
-        out_dir.mkdir(exist_ok=False, parents=True)
-        np.save(out_dir / "prediction.npy", prediction)
-        np.save(out_dir / "target.npy", target)
-
-        prediction = prediction.detach().cpu()
-        target = target.detach().cpu()
+    condition[condition != condition] = 0.0  # Replace NaNs with zeros
 
     # ----------------------------------------------------
-    # Calculate prediction statistics
+    # Sample
+    # ----------------------------------------------------
+    with torch.no_grad():
+        prediction = torch.concat([
+            model.sample(
+                condition,
+                num_steps=500,
+            )
+            for _ in range(ensemble_size)
+        ], dim=0)
+
+    # Undo normalization
+    prediction = unnormalize(prediction, stats, target_vars)
+    # Crop back to original size (guard against pad == 0, where slice [0:-0] is empty)
+    prediction = prediction[
+        :, :,
+        pad_x : prediction.shape[2] - pad_x if pad_x > 0 else None,
+        pad_y : prediction.shape[3] - pad_y if pad_y > 0 else None,
+    ]
+    prediction = prediction.cpu()
+
+    # prediction here is the residual (model output), save before unresidualising
+    res_prediction = prediction.detach().cpu()
+    abs_prediction = unresidualise(data['regridded'], prediction, target_vars).cpu()
+
+    # ----------------------------------------------------
+    # Save arrays
     # ----------------------------------------------------
 
-    # Scale precipitation to mm/day for plotting
-    prediction[:, 3, :, :] *= 86400
-    target[:, 3, :, :] *= 86400
+    out_dir.mkdir(exist_ok=True, parents=True)
+    np.save(out_dir / "res_prediction.npy", res_prediction.numpy())
+    np.save(out_dir / "abs_prediction.npy", abs_prediction.numpy())
 
-    prediction_mean = prediction.mean(dim=0)
-    prediction_std = prediction.std(dim=0)
-    target = target.squeeze()
-    asb_err = torch.abs(prediction_mean - target)
-
-    min_temp_std = prediction_std[0:3].min().item()
-    max_temp_std = prediction_std[0:3].max().item()
-    min_prec_std = prediction_std[3].min().item()
-    max_prec_std = prediction_std[3].max().item()
-    scale_std = [(min_temp_std, max_temp_std), (min_temp_std, max_temp_std), (min_temp_std, max_temp_std), (min_prec_std, max_prec_std)]
-
-    min_temp = min(prediction_mean[1].min().item(), target[1].min().item())
-    max_temp = max(prediction_mean[2].max().item(), target[2].max().item())
-    min_prec = min(prediction_mean[3].min().item(), target[3].min().item())
-    max_prec = max(prediction_mean[3].max().item(), target[3].max().item())
-    scale_mean = [(min_temp, max_temp), (min_temp, max_temp), (min_temp, max_temp), (min_prec, max_prec)]
-
-    min_temp_err = asb_err[0:3].min().item()
-    max_temp_err = asb_err[0:3].max().item()
-    min_prec_err = asb_err[3].min().item()
-    max_prec_err = asb_err[3].max().item()
-    scale_err = [(min_temp_err, max_temp_err), (min_temp_err, max_temp_err), (min_temp_err, max_temp_err), (min_prec_err, max_prec_err)]
-
-    scales = [scale_std, scale_mean, scale_mean, scale_err]
-
-    metrics = {
-        "Prediction Std": prediction_std,
-        "Prediction Mean": prediction_mean,
-        "Ground Truth": target,
-        "Absolute Error": asb_err
-    }
-    colorbar_labels = [["Uncertainty", "Temperature [K]", "Temperature [K]", "Absolute Error"] for _ in range(3)]
-    colorbar_labels.append(["Uncertainty", "Precipitation [kg/m²/day]", "Precipitation [kg/m²/day]", "Absolute Error"])
-    variables = ["Mean Temperature", "Minimum Temperature", "Maximum Temperature", "Precipitation"]
-
-    plot_prediction(
-        metrics, 
-        variables=variables, 
-        scales=scales,
-        out_dir=out_dir, 
-        cbar_labels=colorbar_labels, 
-        ensemble_size=args.ensemble_size
-    )
-
+    fig = plot_predictions(abs_prediction, data["targets"], date=date)
+    fig.savefig(out_dir / "diagnostics.png", dpi=150, bbox_inches="tight")
+    plt.close(fig)
 
 
 def parse_args():
@@ -298,10 +198,19 @@ def parse_args():
     )
 
     parser.add_argument(
-        "--load_from_npy",
-        type=str,
-        default=None,
-        help="Path to the .npy file containing the data to load",
+        "--scenario", type=str, default="historical", help="Scenario to sample from"
+    )
+
+    parser.add_argument(
+        "--member", type=str, default="r1i1p1f1", help="Member to sample from"
+    )
+
+    parser.add_argument(
+        "--date", type=str, default="1951-01-01", help="Date to sample from"
+    )
+
+    parser.add_argument(
+        "--config_path", type=str, default="./src/configs/sample_config.toml", help="Path to the config file"
     )
 
     return parser.parse_args()
@@ -309,4 +218,12 @@ def parse_args():
 
 if __name__ == "__main__":
     args = parse_args()
-    main(args.run_id, args.checkpoint, args.ensemble_size, args.load_from_npy)
+    main(
+        run_id=args.run_id,
+        checkpoint=args.checkpoint,
+        ensemble_size=args.ensemble_size,
+        scenario=args.scenario,
+        member=args.member,
+        date=args.date,
+        config_path=args.config_path,
+    )
