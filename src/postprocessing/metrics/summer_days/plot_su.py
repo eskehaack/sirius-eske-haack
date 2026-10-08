@@ -1,3 +1,4 @@
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 import cartopy.crs as ccrs
@@ -44,11 +45,15 @@ def summer_days_plot(member="r1i1p1f1"):
     )
 
     # --- Colormaps and norms ---
-    abs_cmap = "YlOrRd"
-    abs_norm = mcolors.Normalize(vmin=0,   vmax=366)
+    abs_cmap = mpl.colormaps["YlOrRd"]
+    bounds = [0, 10, 50, 100, 200, 300, 366]
+    abs_norm = mpl.colors.BoundaryNorm(bounds, abs_cmap.N)
+    abs_colorizer = mpl.colorizer.Colorizer(norm=abs_norm, cmap='YlOrRd')
 
-    div_cmap = "magma_r"
-    div_norm = mcolors.Normalize(vmin=0, vmax=120)
+    div_cmap = mpl.colormaps["magma_r"]
+    bounds = [-10, 0, 10, 20, 30, 50, 80, 100]
+    div_norm = mpl.colors.BoundaryNorm(bounds, div_cmap.N, extend='both')
+    div_colorizer = mpl.colorizer.Colorizer(norm=div_norm, cmap='magma_r')
 
     # --- Layout ---
     titles  = ["Mid SSP126 (2020-2049)", "Late SSP126 (2070-2099)",
@@ -89,7 +94,7 @@ def summer_days_plot(member="r1i1p1f1"):
         im_abs = plot_map(axes_abs[col], data, abs_norm, abs_cmap, title)
 
     fig.colorbar(
-        plt.cm.ScalarMappable(norm=abs_norm, cmap=abs_cmap),
+        mpl.colorizer.ColorizingArtist(abs_colorizer),
         ax=axes_abs, orientation="vertical", fraction=0.02, pad=0.02,
         label="Summer days per year"
     )
@@ -102,7 +107,7 @@ def summer_days_plot(member="r1i1p1f1"):
         im_div = plot_map(axes_anom[col], data, div_norm, div_cmap)
 
     fig.colorbar(
-        plt.cm.ScalarMappable(norm=div_norm, cmap=div_cmap),
+        mpl.colorizer.ColorizingArtist(div_colorizer),
         ax=axes_anom, orientation="vertical", fraction=0.02, pad=0.02,
         label="Δ Summer days vs historical"
     )
@@ -146,4 +151,4 @@ def summer_days_plot(member="r1i1p1f1"):
 
 if __name__ == "__main__":
     fig = summer_days_plot()
-    plt.savefig("./test.png")
+    plt.savefig("./test-su.png")

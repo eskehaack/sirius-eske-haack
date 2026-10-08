@@ -1,3 +1,4 @@
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 import cartopy.crs as ccrs
@@ -51,6 +52,17 @@ def wet_days_plot(member="r1i1p1f1"):
     div_cmap = "RdYlBu"
     div_norm = mcolors.TwoSlopeNorm(vcenter=0, vmin=-25, vmax=25)
 
+    # --- Colormaps and norms ---
+    abs_cmap = mpl.colormaps["Blues"]
+    bounds = [0, 5, 10, 20, 100, 200, 366]
+    abs_norm = mpl.colors.BoundaryNorm(bounds, abs_cmap.N)
+    abs_colorizer = mpl.colorizer.Colorizer(norm=abs_norm, cmap='Blues')
+
+    div_cmap = mpl.colormaps["RdYlBu"]
+    bounds = [-25, -15, -10, -5, 0, 5, 10, 15, 25]
+    div_norm = mpl.colors.BoundaryNorm(bounds, div_cmap.N, extend='both')
+    div_colorizer = mpl.colorizer.Colorizer(norm=div_norm, cmap='RdYlBu')
+
     # --- Layout ---
     titles  = ["Mid SSP126 (2020-2049)", "Late SSP126 (2070-2099)",
                "Mid SSP370 (2020-2049)", "Late SSP370 (2070-2099)"]
@@ -90,7 +102,7 @@ def wet_days_plot(member="r1i1p1f1"):
         im_abs = plot_map(axes_abs[col], data, abs_norm, abs_cmap, title)
 
     fig.colorbar(
-        plt.cm.ScalarMappable(norm=abs_norm, cmap=abs_cmap),
+        mpl.colorizer.ColorizingArtist(abs_colorizer),
         ax=axes_abs, orientation="vertical", fraction=0.02, pad=0.02,
         label="Wet days per year"
     )
@@ -103,7 +115,7 @@ def wet_days_plot(member="r1i1p1f1"):
         im_div = plot_map(axes_anom[col], data, div_norm, div_cmap)
 
     fig.colorbar(
-        plt.cm.ScalarMappable(norm=div_norm, cmap=div_cmap),
+        mpl.colorizer.ColorizingArtist(div_colorizer),
         ax=axes_anom, orientation="vertical", fraction=0.02, pad=0.02,
         label="Δ Wet days vs historical"
     )
@@ -147,4 +159,4 @@ def wet_days_plot(member="r1i1p1f1"):
 
 if __name__ == "__main__":
     fig = wet_days_plot()
-    plt.savefig("./test.png")
+    plt.savefig("./test-r10mm.png")
