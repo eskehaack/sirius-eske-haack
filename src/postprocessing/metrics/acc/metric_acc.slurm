@@ -37,17 +37,19 @@ for x in "${VARS[@]}"; do
     REGRIDFILES=("${REGRIDHIS}" "${REGRIDSSP}")
 
     # Merge into files
-    cdo mergetime ${HCLIMFILES[@]} ${OUTDIR}/hclim_pipe_${x}.nc
-    cdo mergetime ${REGRIDFILES[@]} ${OUTDIR}/regrid_pipe_${x}.nc
+    cdo mergetime -del29feb ${HCLIMFILES[@]} -detrend ${OUTDIR}/hclim_pipe_${x}.nc
+    cdo mergetime -del29feb ${REGRIDFILES[@]} -detrend ${OUTDIR}/regrid_pipe_${x}.nc
+
+    cdo ymonsub ${OUTDIR}/hclim_pipe_${x}.nc  -ymonmean ${OUTDIR}/hclim_pipe_${x}.nc  ${OUTDIR}/anom_hclim_${x}.nc
+    cdo ymonsub ${OUTDIR}/regrid_pipe_${x}.nc -ymonmean ${OUTDIR}/regrid_pipe_${x}.nc ${OUTDIR}/anom_regrid_${x}.nc
 
     # Compute anomalies and ACC, reading from files
-    cdo timcor \
-        -ydaysub ${OUTDIR}/hclim_pipe_${x}.nc -ydaymean ${OUTDIR}/hclim_pipe_${x}.nc \
-        -ydaysub ${OUTDIR}/regrid_pipe_${x}.nc -ydaymean ${OUTDIR}/regrid_pipe_${x}.nc \
+    cdo timcor ${OUTDIR}/anom_hclim_${x}.nc ${OUTDIR}/anom_regrid_${x}.nc \
         ${OUTDIR}/acc_${x}_${scenario}_${member}.nc
 
     # Clean up merges
     rm ${OUTDIR}/hclim_pipe_${x}.nc ${OUTDIR}/regrid_pipe_${x}.nc
+    rm ${OUTDIR}/anom_hclim_${x}.nc ${OUTDIR}/anom_regrid_${x}.nc
 
     echo "Done: ${x}"
 done
