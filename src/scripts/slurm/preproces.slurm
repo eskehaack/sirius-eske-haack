@@ -12,13 +12,13 @@
 
 set -euo pipefail
 
-cd "/users/haackesk/Desktop/sirius/"
+cd "/scratch/project_465002687/sirius/"
 
 SIF="/scratch/project_465002687/ec_earth/containers/dockerv4.sif"
 
 pwd
 
 srun --account=project_465002687 singularity exec \
-    --bind /scratch/project_465002687/ec_earth:/scratch/project_465002687/ec_earth \
+    --bind /scratch/project_465002687 \
     "$SIF" \
     python ./src/data_builders/preproces.py

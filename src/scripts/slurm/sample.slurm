@@ -48,15 +48,16 @@ amd-smi version
 # Run
 # --------------------------------------------------
 
-cd "/users/haackesk/Desktop/sirius/"
+cd "/scratch/project_465002687/sirius/"
 SIF="/scratch/project_465002687/ec_earth/containers/dockerv4.sif"
 
 srun --account=project_465002687 singularity exec \
-    --bind /scratch/project_465002687/ec_earth:/scratch/project_465002687/ec_earth \
+    --bind /scratch/project_465002687 \
     "$SIF" \
     python -m src.sample \
-        --run_id "22585245" \
-        --ensemble_size 10 \
-        --date "2026-10-07" \
-        --scenario "ssp370" \
+        --run_id "22628419" \
+        --ensemble_size 5 \
+        --timesteps 500 \
+        --date "1970-03-01" \
+        --scenario "historical" \
         --member "r1i1p1f1"

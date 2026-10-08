@@ -4,7 +4,7 @@ X=tasmax
 
 for scenario in historical ssp126 ssp370; do
     for member in r1i1p1f1; do
-        GRIDFILE=/users/haackesk/Desktop/sirius/src/scripts/cdo_cmd/grid_models/hclim_grid.txt
+        GRIDFILE=/scratch/project_465002687/sirius/src/scripts/cdo_cmd/grid_models/hclim_grid.txt
         INDIR="/scratch/project_465002687/ec_earth/predictors/EC-Earth3-Veg-v2/${scenario}/${member}"
         INFILES=("${INDIR}/${X}_*.nc")
 

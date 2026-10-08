@@ -26,6 +26,6 @@ export MPLCONFIGDIR="/tmp/$USER/mpl"
 mkdir -p "/tmp/$USER/numba_cache"
 export NUMBA_CACHE_DIR="/tmp/$USER/numba_cache"
 
-cd ~/Desktop/sirius
+cd /scratch/project_465002687/sirius
 
 srun --account=project_465002687 singularity build /scratch/project_465002687/ec_earth/containers/dockerv4.sif singularity/update.def

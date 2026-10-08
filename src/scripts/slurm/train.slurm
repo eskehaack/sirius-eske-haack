@@ -48,18 +48,18 @@ amd-smi version
 # Run
 # --------------------------------------------------
 
-cd "/users/haackesk/Desktop/sirius/"
+cd "/scratch/project_465002687/sirius/"
 SIF="/scratch/project_465002687/ec_earth/containers/dockerv4.sif"
 
 srun --account=project_465002687 singularity exec \
-    --bind /scratch/project_465002687/ec_earth:/scratch/project_465002687/ec_earth \
+    --bind /scratch/project_465002687 \
     "$SIF" \
     python -m src.train \
         --config_path ./src/configs/sample_config.toml \
         --run_id "$SLURM_JOB_ID"
 
 srun --account=project_465002687 singularity exec \
-    --bind /scratch/project_465002687/ec_earth:/scratch/project_465002687/ec_earth \
+    --bind /scratch/project_465002687 \
     "$SIF" \
     python -m src.sample \
         --run_id "$SLURM_JOB_ID" \

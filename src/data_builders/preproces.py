@@ -3,7 +3,7 @@ import numpy as np
 from smhi_dataloader import ClimateDataBuilder, parse_config
 
 
-config_path = '/users/haackesk/Desktop/sirius/src/configs/sample_config.toml'
+config_path = '/scratch/project_465002687/sirius/src/configs/sample_config.toml'
 date_config = parse_config(config_path=config_path, config_keyword="dates")
 preprocessing_config = parse_config(config_path=config_path, config_keyword="preprocessing")
 predictor_config = parse_config(config_path=config_path, config_keyword="predictors")
