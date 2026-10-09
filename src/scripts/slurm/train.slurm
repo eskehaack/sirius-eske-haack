@@ -7,7 +7,7 @@
 #SBATCH --cpus-per-task=5
 #SBATCH --gpus-per-task=1
 #SBATCH --mem=32G
-#SBATCH --time=08:00:00
+#SBATCH --time=02:00:00
 #SBATCH --output=./hpc_outputs/%x-%j.out
 #SBATCH --error=./hpc_outputs/%x-%j.err
 

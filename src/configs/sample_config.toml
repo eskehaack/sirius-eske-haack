@@ -1,6 +1,6 @@
 [training]
 batch_size = 4
-max_epochs = 20
+max_epochs = 10
 lr = 5e-5
 base_channels = 64
 num_workers = 4
@@ -11,6 +11,7 @@ timesteps = 1000
 channel_mults = [1, 2, 4, 8]
 checkpoint_every_n_steps = 0
 log_every_n_step = 10
+model = "conditional_unet"
 
 [dates]
 train_blocks = [

@@ -9,7 +9,7 @@ from lightning.pytorch.loggers import TensorBoardLogger
 
 from src.data_builders.dataloader import DataModule
 from src.data_builders.smhi_dataloader import parse_config
-from src.model import LitConditionalDDPM
+from src.model import LitConditionalDDPM, LitConditionalUNet
 from src.callbacks.device_logger import AMDGPUMonitor
 
 
@@ -31,6 +31,7 @@ def train_ddpm(run_id: str, config_path: str = "./src/configs/training_config.to
     channel_mults = tuple(config["channel_mults"])
     checkpoint_every_n_steps = None if int(config["checkpoint_every_n_steps"]) == 0 else int(config["checkpoint_every_n_steps"])
     log_every_n_step = int(config["log_every_n_step"])
+    model = str(config["model"])
 
     datamodule = DataModule(
         batch_size=batch_size,
@@ -38,7 +39,11 @@ def train_ddpm(run_id: str, config_path: str = "./src/configs/training_config.to
         config_path=config_path,
     )
 
-    model = LitConditionalDDPM(
+    model_types = {
+        "conditional_ddpm": LitConditionalDDPM,
+        "conditional_unet": LitConditionalUNet
+    }
+    model = model_types[model](
         target_channels=target_channels,
         condition_channels=condition_channels,
         base_channels=base_channels,
@@ -71,7 +76,7 @@ def train_ddpm(run_id: str, config_path: str = "./src/configs/training_config.to
             AMDGPUMonitor(interval=1.0, device_index=0),
             EarlyStopping(monitor="val_loss", mode="min", min_delta=0.001, patience=4)
         ],
-        logger=TensorBoardLogger("logs", name="conditional_ddpm"),
+        logger=TensorBoardLogger(save_dir="logs", name=str(run_id)),
         log_every_n_steps=log_every_n_step,
         val_check_interval=checkpoint_every_n_steps,
     )
