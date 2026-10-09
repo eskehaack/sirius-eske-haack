@@ -60,6 +60,8 @@ def plot_predictions(
     prediction: torch.Tensor | np.ndarray,
     targets: xr.Dataset,
     date: str = "",
+    ensemble_size: int = 5,
+    timesteps: int = 500,
     output_path: str | None = None
 ) -> plt.Figure:
     """
@@ -115,6 +117,7 @@ def plot_predictions(
     title = f"Prediction diagnostics"
     if date:
         title += f"  ·  {date}"
+    title += f"  ·  Ensemble size: {ensemble_size}, Timesteps: {timesteps}"
     fig.suptitle(title, y=1.01)
 
     for col_idx, col_title in enumerate(_COL_TITLES):
@@ -124,16 +127,16 @@ def plot_predictions(
         label, unit, cmap_name = _VAR_META[var]
         var_idx = row_idx                 # variable order matches _VAR_META
 
-        if var == "pr":
-            # Precipitation is in kg/m²/s, convert to mm/day for plotting
-            gt_arrays[var] *= 86400.0
-            pred[:, var_idx] *= 86400.0
-
-        gt     = gt_arrays[var]           # (H, W)
-        ens    = pred[:, var_idx]         # (E, H, W)
+        gt     = gt_arrays[var].copy()    # (H, W)
+        ens    = pred[:, var_idx].copy()  # (E, H, W)
         mean   = ens.mean(axis=0)         # (H, W)
         std    = ens.std(axis=0)          # (H, W)
         error  = mean - gt                # (H, W)  signed error
+
+        if var == "pr":
+            # Precipitation is in kg/m²/s, convert to mm/day for plotting
+            gt *= 86400.0
+            ens *= 86400.0
 
         # Add a plain axes spanning the row's left edge for the ylabel
         row_label_ax = fig.add_axes(
@@ -205,6 +208,67 @@ def plot_predictions(
 
     return fig
 
+def plot_prediction_distribution(
+    prediction: torch.Tensor | np.ndarray,
+    targets: xr.Dataset,
+    date: str = "",
+    ensemble_size: int = 5,
+    timesteps: int = 500,
+    output_path: str | None = None
+):
+    """
+    Plot the distribution of predictions for each variable.
+
+    Parameters
+    ----------
+    prediction : torch.Tensor or np.ndarray, shape (ensemble, 4, H, W)
+        Absolute (un-residualised) predictions from the model.
+    targets : xr.Dataset
+        Target dataset with variables tas, tasmin, tasmax, pr.
+        Must contain lat/lon coordinates.
+    date : str
+        Date string shown in the figure title.
+    """
+    pg.setup()
+
+    pred = _to_numpy(prediction)           # (E, 4, H, W)
+    var_names = list(_VAR_META.keys())
+    gt_arrays = _extract_targets(targets, var_names)
+
+    fig = plt.figure()
+    fig.suptitle(f'Distribution of Predictions · {date} · Ensemble size: {ensemble_size}, Timesteps: {timesteps}')
+
+    # Plot the distribution of predictions for each variable
+    for i, var in enumerate(var_names):
+
+        ax = fig.add_subplot(2, 2, i + 1)
+
+        label, unit, _ = _VAR_META[var]
+        var_idx = i                 # variable order matches _VAR_META
+        target = gt_arrays[var].copy()     # (H, W)
+
+        ens    = pred[:, var_idx].copy()  # (E, H, W)
+        mean   = ens.mean(axis=0)         # (H, W)
+
+        if var == "pr":
+            # Precipitation is in kg/m²/s, convert to mm/day for plotting
+            target *= 86400.0
+            mean *= 86400.0
+
+        ax.hist(mean.ravel(), bins=50, alpha=0.5, density=True, label='Ensemble Mean')
+        ax.hist(target.ravel(), bins=50, alpha=0.5, density=True, label='Ground Truth')
+        ax.set_title(f'{label}')
+        ax.set_xlabel(f'{label} [{unit}]')
+        ax.set_ylabel('Frequency')
+        ax.legend()
+        ax.grid()
+    
+    if output_path:
+        pg.save(fig, output_path)
+        plt.close(fig)
+
+    return fig
+
 if __name__ == "__main__":
     import argparse
     import toml
@@ -225,11 +289,5 @@ if __name__ == "__main__":
     prediction = np.load(args.prediction)
     targets = load_sample(config=config, scenario="historical", member="r1i1p1f1", date=args.date)["targets"]
     # Plot
-    fig = plot_predictions(prediction, targets, date=args.date)
-
-    # Save or show
-    if args.output:
-        fig.savefig(args.output, dpi=150, bbox_inches="tight")
-        print(f"Figure saved to {args.output}")
-    else:
-        plt.show()
+    fig = plot_predictions(prediction, targets, date=args.date, output_path="test_diagnostics.png")
+    fig = plot_prediction_distribution(prediction, targets, date=args.date, output_path="test_distribution.png")

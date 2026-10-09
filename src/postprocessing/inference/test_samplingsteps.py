@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 
 from src.model import LitConditionalDDPM
 from src.data_builders.data_utils import load_sample
-from src.postprocessing.inference.plot_samples import plot_predictions, plot_prediction_distribution
+from src.postprocessing import plt_guide as pg
 
 def load_checkpoint(run_id: str, checkpoint: str = "last") -> LitConditionalDDPM:
     # ----------------------------------------------------
@@ -76,6 +76,13 @@ def normalize(x, stats):
         x[:, i, :, :] = (x[:, i, :, :] - mean) / std
     return x
 
+def normalize_target(x, stats, target_vars):
+    for i, var in enumerate(target_vars):
+        mean = torch.tensor(stats[var].sel(statistic="targ_mean").values).to(x.device)
+        std = torch.tensor(stats[var].sel(statistic="targ_std").values).to(x.device)
+        x[:, i, :, :] = (x[:, i, :, :] - mean) / std
+    return x
+
 def unnormalize(prediction, stats, target_vars):
     for i, var in enumerate(target_vars):
         mean = torch.tensor(stats[var].sel(statistic="targ_mean").values).to(prediction.device)
@@ -93,7 +100,6 @@ def unresidualise(regridded, prediction, target_vars):
 def main(
     run_id: str, 
     checkpoint: str = "last", 
-    ensemble_size: int = 5, 
     timesteps: int = 500,
     scenario: str = "historical",
     member: str = "r1i1p1f1",
@@ -117,6 +123,8 @@ def main(
         channels = []
         for v in ds.data_vars:
             arr = ds[v].values  # (H, W) or (plev, H, W)
+            if arr.ndim == 0:
+                continue  # Skip scalar variables
             if arr.ndim == 2:
                 channels.append(arr[np.newaxis])  # → (1, H, W)
             else:
@@ -131,11 +139,17 @@ def main(
     ).unsqueeze(0).float().to(model.device)  # (1, C_static, H, W)
 
     target_shape = data['targets']['lon'].shape
-    target_vars = ["tas", "tasmin", "tasmax", "pr"]
+    gt = torch.from_numpy(ds_to_channels(data["targets"])
+    ).unsqueeze(0).float().to(model.device)
 
+    regridded = torch.from_numpy(ds_to_channels(data["regridded"])
+    ).unsqueeze(0).float().to(model.device)
+
+    target = gt - regridded
 
     stats = xr.open_dataset(config['preprocessing']['normalization_stats_path'])
     x = normalize(x, stats)
+    target = normalize_target(target, stats, ['tas', 'tasmin', 'tasmax', 'pr'])
     condition, (pad_x, pad_y) = get_resized(model.image_size, target_shape, x, static)
     condition = condition.to(model.device)
 
@@ -145,53 +159,21 @@ def main(
     # Sample
     # ----------------------------------------------------
     with torch.no_grad():
-        prediction = torch.concat([
-            model.sample(
-                condition,
-                num_steps=timesteps,
-            )
-            for _ in range(ensemble_size)
-        ], dim=0)
+        steps = [10, 50, 100, 250, 500, 1000]
+        results = []
+        for num_steps in steps:
+            x_final = model.sample(condition, num_steps=num_steps)
+            x_crop = x_final[:, :, pad_x:-pad_x, pad_y:-pad_y]
+            results.append(F.mse_loss(x_crop, target).item())
 
-    # Undo normalization
-    prediction = unnormalize(prediction, stats, target_vars)
-    # Crop back to original size (guard against pad == 0, where slice [0:-0] is empty)
-    prediction = prediction[
-        :, :,
-        pad_x : prediction.shape[2] - pad_x if pad_x > 0 else None,
-        pad_y : prediction.shape[3] - pad_y if pad_y > 0 else None,
-    ]
-    prediction = prediction.cpu()
-
-    # prediction here is the residual (model output), save before unresidualising
-    res_prediction = prediction.detach().cpu()
-    abs_prediction = unresidualise(data['regridded'], prediction, target_vars).cpu()
-
-    # ----------------------------------------------------
-    # Save arrays
-    # ----------------------------------------------------
-
-    out_dir.mkdir(exist_ok=True, parents=True)
-    np.save(out_dir / f"res_prediction_{ensemble_size}_{timesteps}.npy", res_prediction.numpy())
-    np.save(out_dir / f"abs_prediction_{ensemble_size}_{timesteps}.npy", abs_prediction.numpy())
-
-    plot_predictions(
-        abs_prediction, 
-        data["targets"], 
-        date=date, 
-        ensemble_size=ensemble_size,
-        timesteps=timesteps,
-        output_path=out_dir / f"prediction_diagnostics_{ensemble_size}_{timesteps}.png"
-    )
-
-    plot_prediction_distribution(
-        abs_prediction, 
-        data["targets"], 
-        date=date, 
-        ensemble_size=ensemble_size,
-        timesteps=timesteps,
-        output_path=out_dir / f"prediction_distributions_{ensemble_size}_{timesteps}.png"
-    )
+    pg.setup()
+    fig = plt.figure()
+    plt.plot(steps, results)
+    plt.title(f"Sampling Steps vs Loss")
+    plt.xlabel("Sampling Steps")
+    plt.ylabel("MSE Loss")
+    pg.save(fig, out_dir / f"sampling_steps_vs_loss.png")
+    plt.close()
 
 
 def parse_args():
@@ -206,17 +188,7 @@ def parse_args():
     )
 
     parser.add_argument(
-        "--ensemble_size",
-        type=int,
-        default=5,
-        help="How many images in the ensamble to generate",
-    )
-
-    parser.add_argument(
-        "--timesteps",
-        type=int,
-        default=500,
-        help="Number of timesteps to use in the sampling process",
+        "--timesteps", type=int, default=500, help="Number of timesteps to sample"
     )
 
     parser.add_argument(
@@ -243,7 +215,6 @@ if __name__ == "__main__":
     main(
         run_id=args.run_id,
         checkpoint=args.checkpoint,
-        ensemble_size=args.ensemble_size,
         timesteps=args.timesteps,
         scenario=args.scenario,
         member=args.member,

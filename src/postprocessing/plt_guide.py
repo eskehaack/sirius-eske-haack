@@ -190,7 +190,7 @@ def save(fig: plt.Figure, path: str, **kwargs) -> None:
 
     Extra kwargs are forwarded to fig.savefig().
     """
-
+    path = str(path)
     formatting = "pdf" if PDF_MODE else "png"
     if not path.endswith(f".{formatting}"):
         path = path + f".{formatting}"

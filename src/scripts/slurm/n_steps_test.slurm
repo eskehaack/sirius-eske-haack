@@ -1,0 +1,62 @@
+#!/bin/bash
+#SBATCH --job-name=ec_earth_test_n_samples
+#SBATCH --account=project_465002687
+#SBATCH --partition=small-g
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=1
+#SBATCH --gpus-per-task=1
+#SBATCH --mem=32G
+#SBATCH --time=00:10:00
+#SBATCH --output=./hpc_outputs/%x-%j.out
+#SBATCH --error=./hpc_outputs/%x-%j.err
+
+set -euo pipefail
+
+# --------------------------------------------------
+# Job-local cache directory setup
+# --------------------------------------------------
+
+# Job-local temporary directory
+export TMPDIR="/tmp/$USER/$SLURM_JOB_ID"
+export SINGULARITY_TMPDIR="$TMPDIR"
+export SINGULARITY_CACHEDIR="$TMPDIR"
+
+mkdir -p "$TMPDIR"
+chmod 700 "$TMPDIR"
+
+echo "TMPDIR=$TMPDIR"
+echo "SINGULARITY_TMPDIR=$SINGULARITY_TMPDIR"
+echo "SINGULARITY_CACHEDIR=$SINGULARITY_CACHEDIR"
+
+export MIOPEN_USER_DB_PATH="$TMPDIR/miopen-db"
+export MIOPEN_CUSTOM_CACHE_DIR="$TMPDIR/miopen-cache"
+
+mkdir -p "$MIOPEN_USER_DB_PATH"
+mkdir -p "$MIOPEN_CUSTOM_CACHE_DIR"
+
+echo "MIOPEN_USER_DB_PATH=$MIOPEN_USER_DB_PATH"
+echo "MIOPEN_CUSTOM_CACHE_DIR=$MIOPEN_CUSTOM_CACHE_DIR"
+
+# --------------------------------------------------
+# Job validation
+# --------------------------------------------------
+
+amd-smi version
+
+# --------------------------------------------------
+# Run
+# --------------------------------------------------
+
+cd "/scratch/project_465002687/sirius/"
+SIF="/scratch/project_465002687/ec_earth/containers/dockerv4.sif"
+
+srun --account=project_465002687 singularity exec \
+    --bind /scratch/project_465002687 \
+    "$SIF" \
+    python ./src/postprocessing/inference/test_samplingsteps.py \
+        --run_id "22628419" \
+        --timesteps 1000 \
+        --date "1970-01-01" \
+        --scenario "historical" \
+        --member "r1i1p1f1"
