@@ -1,6 +1,7 @@
 import argparse
 from pathlib import Path
 import toml
+import yaml
 
 import xarray as xr
 import torch
@@ -8,7 +9,7 @@ import torch.nn.functional as F
 import numpy as np
 import matplotlib.pyplot as plt
 
-from src.model import LitConditionalDDPM
+from src.model import LitConditionalDDPM, LitConditionalUNet
 from src.data_builders.data_utils import load_sample
 from src.postprocessing.inference.plot_samples import plot_predictions, plot_prediction_distribution
 
@@ -20,10 +21,18 @@ def load_checkpoint(run_id: str, checkpoint: str = "last") -> LitConditionalDDPM
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     checkpoint_path = Path(f"./checkpoints/{run_id}/{checkpoint}.ckpt")
+    log_path = Path(f"./logs/{run_id}/version_0/hparams.yaml")
+    hparams = yaml.safe_load(open(log_path, "r"))
+    m_spec = hparams.get('model', "conditional_ddpm")
+    mclass = {
+        "conditional_ddpm": LitConditionalDDPM,
+        "conditional_unet": LitConditionalUNet,
+    }
+
     if not checkpoint_path.exists():
         raise FileNotFoundError(f"Checkpoint file not found: {checkpoint_path}\nModel training did not complete as expected.")
     
-    model = LitConditionalDDPM.load_from_checkpoint(checkpoint_path)
+    model = mclass[m_spec].load_from_checkpoint(checkpoint_path)
     model.eval()
     model.to(device)
     return model
