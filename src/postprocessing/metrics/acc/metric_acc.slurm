@@ -7,7 +7,7 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=128G
-#SBATCH --time=02:00:00
+#SBATCH --time=04:00:00
 #SBATCH --output=./hpc_outputs/%x-%j.out
 #SBATCH --error=./hpc_outputs/%x-%j.err
 
@@ -21,7 +21,7 @@ if [[ ! -d "${OUTDIR}" ]]; then
 fi
 
 # Variables to process
-VARS=("tasmax" "tasmin" "pr" "tas")
+VARS=("pr")
 
 for x in "${VARS[@]}"; do
     echo "Processing variable: ${x}"
@@ -36,20 +36,48 @@ for x in "${VARS[@]}"; do
     REGRIDSSP="/scratch/project_465002687/ec_earth/predictors/regridded/${scenario}/${member}/${x}_EUR-12_day_EC-Earth3-Veg_${scenario}_${member}_regridded.nc"
     REGRIDFILES=("${REGRIDHIS}" "${REGRIDSSP}")
 
-    # Merge into files
-    cdo mergetime -del29feb ${HCLIMFILES[@]} -detrend ${OUTDIR}/hclim_pipe_${x}.nc
-    cdo mergetime -del29feb ${REGRIDFILES[@]} -detrend ${OUTDIR}/regrid_pipe_${x}.nc
+    # Merge files
+    cdo mergetime ${HCLIMFILES[@]}  ${OUTDIR}/hclim_raw_${x}.nc
+    cdo mergetime ${REGRIDFILES[@]} ${OUTDIR}/regrid_raw_${x}.nc
 
-    cdo ymonsub ${OUTDIR}/hclim_pipe_${x}.nc  -ymonmean ${OUTDIR}/hclim_pipe_${x}.nc  ${OUTDIR}/anom_hclim_${x}.nc
-    cdo ymonsub ${OUTDIR}/regrid_pipe_${x}.nc -ymonmean ${OUTDIR}/regrid_pipe_${x}.nc ${OUTDIR}/anom_regrid_${x}.nc
+    echo "Merged files"
 
-    # Compute anomalies and ACC, reading from files
-    cdo timcor ${OUTDIR}/anom_hclim_${x}.nc ${OUTDIR}/anom_regrid_${x}.nc \
+    # Remove seasonal cycle first
+    cdo ydaysub ${OUTDIR}/hclim_raw_${x}.nc -ydaymean ${OUTDIR}/hclim_raw_${x}.nc  ${OUTDIR}/anom_hclim_${x}.nc
+    cdo ydaysub ${OUTDIR}/hclim_raw_${x}.nc -ydaymean ${OUTDIR}/regrid_raw_${x}.nc ${OUTDIR}/anom_regrid_${x}.nc
+
+    echo "Removed seasonal cycle"
+
+    # Then detrend the anomalies
+    cdo detrend,equal=false ${OUTDIR}/anom_hclim_${x}.nc  ${OUTDIR}/anom_hclim_detrended_${x}.nc
+    cdo detrend,equal=false ${OUTDIR}/anom_regrid_${x}.nc ${OUTDIR}/anom_regrid_detrended_${x}.nc
+
+    echo "Detrended anomalies"
+
+    NTIME_HCLIM=$(cdo ntime ${OUTDIR}/anom_hclim_detrended_${x}.nc)
+    NTIME_REGRID=$(cdo ntime ${OUTDIR}/anom_regrid_detrended_${x}.nc)
+
+    if [ "${NTIME_HCLIM}" != "${NTIME_REGRID}" ]; then
+        echo "ERROR: Time steps do not match for variable ${x}!"
+        echo "  HCLIM:  ${NTIME_HCLIM}"
+        echo "  REGRID: ${NTIME_REGRID}"
+        exit 1
+    fi
+
+    echo "Time steps match (${NTIME_HCLIM}), proceeding with timcor..."
+
+    # Compute ACC
+    cdo timcor ${OUTDIR}/anom_hclim_detrended_${x}.nc ${OUTDIR}/anom_regrid_detrended_${x}.nc \
         ${OUTDIR}/acc_${x}_${scenario}_${member}.nc
 
-    # Clean up merges
-    rm ${OUTDIR}/hclim_pipe_${x}.nc ${OUTDIR}/regrid_pipe_${x}.nc
-    rm ${OUTDIR}/anom_hclim_${x}.nc ${OUTDIR}/anom_regrid_${x}.nc
+    echo "Computed ACC for variable ${x}, saved to ${OUTDIR}/acc_${x}_${scenario}_${member}.nc"
+
+    # Clean up
+    rm ${OUTDIR}/hclim_noleap_${x}.nc ${OUTDIR}/regrid_noleap_${x}.nc
+    rm ${OUTDIR}/hclim_raw_${x}.nc ${OUTDIR}/regrid_raw_${x}.nc
+    rm ${OUTDIR}/hclim_merge_${x}.nc ${OUTDIR}/regrid_merge_${x}.nc
+    rm ${OUTDIR}/anom_hclim_${x}.nc  ${OUTDIR}/anom_regrid_${x}.nc
+    rm ${OUTDIR}/anom_hclim_detrended_${x}.nc ${OUTDIR}/anom_regrid_detrended_${x}.nc
 
     echo "Done: ${x}"
 done
