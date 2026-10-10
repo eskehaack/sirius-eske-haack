@@ -55,9 +55,9 @@ srun --account=project_465002687 singularity exec \
     --bind /scratch/project_465002687 \
     "$SIF" \
     python -m src.sample \
-        --run_id "22669508" \
+        --run_id "22628419" \
         --ensemble_size 5 \
         --timesteps 500 \
-        --date "1970-01-01" \
+        --date "1970-06-01" \
         --scenario "historical" \
         --member "r1i1p1f1"
