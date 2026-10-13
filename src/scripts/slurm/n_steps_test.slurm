@@ -56,7 +56,7 @@ srun --account=project_465002687 singularity exec \
     "$SIF" \
     python ./src/postprocessing/inference/test_samplingsteps.py \
         --run_id "22628419" \
-        --timesteps 1000 \
-        --date "1970-01-01" \
+        --timesteps 200 \
+        --date "1970-06-01" \
         --scenario "historical" \
         --member "r1i1p1f1"

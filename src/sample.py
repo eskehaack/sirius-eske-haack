@@ -22,8 +22,11 @@ def load_checkpoint(run_id: str, checkpoint: str = "last") -> LitConditionalDDPM
 
     checkpoint_path = Path(f"./checkpoints/{run_id}/{checkpoint}.ckpt")
     log_path = Path(f"./logs/{run_id}/version_0/hparams.yaml")
-    hparams = yaml.safe_load(open(log_path, "r"))
-    m_spec = hparams.get('model', "conditional_ddpm")
+    if not log_path.exists():
+        m_spec = "conditional_ddpm"
+    else:
+        hparams = yaml.safe_load(open(log_path, "r"))
+        m_spec = hparams.get('model', "conditional_ddpm")
     mclass = {
         "conditional_ddpm": LitConditionalDDPM,
         "conditional_unet": LitConditionalUNet,
