@@ -372,7 +372,7 @@ class LitConditionalDDPM(pl.LightningModule):
             else:
                 x = mean
 
-        return x.clamp(-1, 1)
+        return x
 
     def configure_optimizers(self):
         # Optimizer and scheduler
