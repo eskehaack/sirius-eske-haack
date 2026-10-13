@@ -159,7 +159,7 @@ def main(
     # Sample
     # ----------------------------------------------------
     with torch.no_grad():
-        steps = [10, 50, 100, 250, 500, 1000]
+        steps = np.linspace(10, timesteps, num=10, dtype=int)
         results = []
         for num_steps in steps:
             x_final = model.sample(condition, num_steps=num_steps)
