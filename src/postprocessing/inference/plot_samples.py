@@ -127,16 +127,22 @@ def plot_predictions(
         label, unit, cmap_name = _VAR_META[var]
         var_idx = row_idx                 # variable order matches _VAR_META
 
-        gt     = gt_arrays[var].copy()    # (H, W)
-        ens    = pred[:, var_idx].copy()  # (E, H, W)
-        mean   = ens.mean(axis=0)         # (H, W)
-        std    = ens.std(axis=0)          # (H, W)
-        error  = mean - gt                # (H, W)  signed error
-
         if var == "pr":
             # Precipitation is in kg/m²/s, convert to mm/day for plotting
+            gt     = gt_arrays[var].copy()    # (H, W)
+            ens    = pred[:, var_idx].copy()  # (E, H, W)
             gt *= 86400.0
             ens *= 86400.0
+            
+            mean   = ens.mean(axis=0)         # (H, W)
+            std    = ens.std(axis=0)          # (H, W)
+            error  = mean - gt 
+        else:
+            gt     = gt_arrays[var].copy()    # (H, W)
+            ens    = pred[:, var_idx].copy()  # (E, H, W)
+            mean   = ens.mean(axis=0)         # (H, W)
+            std    = ens.std(axis=0)          # (H, W)
+            error  = mean - gt                # (H, W)  signed error
 
         # Add a plain axes spanning the row's left edge for the ylabel
         row_label_ax = fig.add_axes(
