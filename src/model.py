@@ -581,6 +581,6 @@ class LitConditionalUNet(pl.LightningModule):
         # Optimizer and scheduler
         optimizer = torch.optim.AdamW(self.parameters(), lr=self.hparams.lr)
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-            optimizer, T_max=self.hparams.max_epochs, eta_min=self.lr
+            optimizer, T_max=self.hparams.max_epochs, eta_min=self.lr * 0.01
         )
         return [optimizer], [{"scheduler": scheduler, "interval": "step"}]
