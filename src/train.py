@@ -28,6 +28,7 @@ def train_ddpm(run_id: str, config_path: str = "./src/configs/training_config.to
     condition_channels = int(config["condition_channels"])
     checkpoint_dir = Path(config["checkpoint_dir"]) / str(run_id)
     timesteps = int(config["timesteps"])
+    schedule = str(config["schedule"])
     channel_mults = tuple(config["channel_mults"])
     checkpoint_every_n_steps = None if int(config["checkpoint_every_n_steps"]) == 0 else int(config["checkpoint_every_n_steps"])
     log_every_n_step = int(config["log_every_n_step"])
@@ -49,6 +50,7 @@ def train_ddpm(run_id: str, config_path: str = "./src/configs/training_config.to
         base_channels=base_channels,
         channel_mults=channel_mults,
         timesteps=timesteps,
+        schedule=schedule,
         lr=lr,
     )
 

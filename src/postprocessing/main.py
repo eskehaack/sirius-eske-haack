@@ -4,6 +4,8 @@ from metrics.summer_days.plot_su import summer_days_plot
 from metrics.frost_days.plot_fd import frost_days_plot
 from metrics.wet_days.plot_r10mm import wet_days_plot
 from metrics.acc.acc import acc_plot
+from noise_schedule.test_schedule import test_noise_schedule
+from noise_schedule.visualise_schedule import visualise_forward_process
 
 if __name__ == "__main__":
     pg.setup()
@@ -13,6 +15,16 @@ if __name__ == "__main__":
         # "r2i1p1f1", 
         # "r3i1p1f1"
     ]
+
+    # pg.save(
+    #     test_noise_schedule(), 
+    #     f"./figures/method/noise_schedule_similarity.png"
+    # )
+
+    pg.save(
+        visualise_forward_process(), 
+        f"./figures/method/forward_process.png"
+    )
 
     for member in members:
         # pg.save(
@@ -30,7 +42,9 @@ if __name__ == "__main__":
         #     f"./figures/data_section/climatology/wet_days_hclim_{member}.png"
         # )
 
-        pg.save(
-            acc_plot(member=member, scenario='ssp370'), 
-            f"./figures/data_section/climatology/acc_ssp370_{member}.png"
-        )
+        # pg.save(
+        #     acc_plot(member=member, scenario='ssp370'), 
+        #     f"./figures/data_section/climatology/acc_ssp370_{member}.png"
+        # )
+
+        pass

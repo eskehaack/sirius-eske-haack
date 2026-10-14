@@ -193,6 +193,7 @@ class LitConditionalDDPM(pl.LightningModule):
         timesteps: int = 1000,
         beta_start: float = 1e-4,
         beta_end: float = 2e-2,
+        schedule: str = "linear",
         dropout: float = 0.0,
         lr: float = 2e-4,
         image_size: int = 432,
@@ -208,9 +209,14 @@ class LitConditionalDDPM(pl.LightningModule):
             dropout=dropout,
         )
 
-        betas = torch.linspace(beta_start, beta_end, timesteps)
-        alphas = 1.0 - betas
-        alpha_bars = torch.cumprod(alphas, dim=0)
+        betas, alphas, alpha_bars = self.schedule(
+            schedule=schedule,
+            timesteps=timesteps,
+            beta_start=beta_start,
+            beta_end=beta_end,
+        )
+        alpha_bars_prev = torch.cat([torch.ones(1, dtype=torch.float32), alpha_bars[:-1]], dim=0)
+        sigmas = (1 - alpha_bars_prev) / (1 - alpha_bars) * betas
 
         self.image_size = image_size
         self.lr = lr
@@ -225,8 +231,26 @@ class LitConditionalDDPM(pl.LightningModule):
         self.register_buffer("alpha_bars", alpha_bars)
         self.register_buffer("sqrt_alpha_bars", torch.sqrt(alpha_bars))
         self.register_buffer("sqrt_one_minus_alpha_bars", torch.sqrt(1.0 - alpha_bars))
+        self.register_buffer("sigmas", sigmas)
 
         self.static = None  # Allocation
+    
+    def schedule(self, schedule: str, timesteps: int, beta_start: float, beta_end: float):
+        if schedule == "linear":
+            betas = torch.linspace(beta_start, beta_end, timesteps)
+        elif schedule == "cosine":
+            s = 0.008
+            t = torch.linspace(0, timesteps, timesteps + 1)
+            alphas_cumprod = torch.cos(((t / timesteps) + s) / (1 + s) * math.pi * 0.5) ** 2
+            alphas_cumprod = alphas_cumprod / alphas_cumprod[0]
+            betas = 1 - (alphas_cumprod[1:] / alphas_cumprod[:-1])
+            betas = torch.clamp(betas, min=0, max=0.999)
+        else:
+            raise ValueError(f"Unknown noise schedule: {schedule}")
+        
+        alphas = 1.0 - betas
+        alpha_bars = torch.cumprod(alphas, dim=0)
+        return betas, alphas, alpha_bars
 
     def q_sample(
         self, x0: torch.Tensor, t: torch.Tensor, noise: torch.Tensor
@@ -356,6 +380,7 @@ class LitConditionalDDPM(pl.LightningModule):
         for i, t_idx in enumerate(step_indices):
             t = torch.full((b,), t_idx.item(), device=device, dtype=torch.long)
 
+            sigma_t = self.sigmas[t][:, None, None, None]
             beta_t = self.betas[t][:, None, None, None]
             alpha_t = self.alphas[t][:, None, None, None]
             alpha_bar_t = self.alpha_bars[t][:, None, None, None]
@@ -363,12 +388,12 @@ class LitConditionalDDPM(pl.LightningModule):
             eps_pred = self.model(x, condition, t)
 
             mean = (1.0 / torch.sqrt(alpha_t)) * (
-                x - ((1.0 - alpha_t) / torch.sqrt(1.0 - alpha_bar_t)) * eps_pred
+                x - (beta_t / torch.sqrt(1.0 - alpha_bar_t)) * eps_pred
             )
 
             if t_idx > 0:
                 noise = torch.randn_like(x)
-                x = mean + torch.sqrt(beta_t) * noise
+                x = mean + torch.sqrt(sigma_t) * noise
             else:
                 x = mean
 
@@ -399,6 +424,7 @@ class LitConditionalUNet(pl.LightningModule):
         timesteps: int = 1000,
         beta_start: float = 1e-4,
         beta_end: float = 2e-2,
+        schedule: str = "linear", # Compatibility
         dropout: float = 0.0,
         lr: float = 2e-4,
         image_size: int = 432,

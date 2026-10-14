@@ -135,7 +135,8 @@ def main(
     x = torch.from_numpy(ds_to_channels(data['predictors'])
     ).unsqueeze(0).float().to(model.device)  # (1, C_pred, H, W)
 
-    static = torch.from_numpy(ds_to_channels(data['static'])
+    static_zarr = xr.open_dataset(config['preprocessing']['static_output'])
+    static = torch.from_numpy(ds_to_channels(static_zarr)
     ).unsqueeze(0).float().to(model.device)  # (1, C_static, H, W)
 
     target_shape = data['targets']['lon'].shape
