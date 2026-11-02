@@ -1,5 +1,5 @@
 Bootstrap: localimage
-From: /scratch/project_465002687/ec_earth/containers/dockerv3.sif
+From: /scratch/project_465002687/ec_earth/containers/dockerv4.sif
 
 %post
     set -eux
@@ -7,7 +7,8 @@ From: /scratch/project_465002687/ec_earth/containers/dockerv3.sif
     . /opt/venv/bin/activate
 
     python -m pip install --no-cache-dir \
-        regionmask
+        diffusers["torch"] \
+        transformers
 
     python -m pip check
 
@@ -18,3 +19,4 @@ From: /scratch/project_465002687/ec_earth/containers/dockerv3.sif
     python -c "import torchvision; print('TorchVision:', torchvision.__version__)"
     python -c "import lightning; print('Lightning:', lightning.__version__)"
     python -c "import regionmask; print('regionmask:', regionmask.__version__)"
+    python -c "import diffusers; print('diffusers:', diffusers.__version__)"
