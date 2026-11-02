@@ -15,7 +15,7 @@ CONFIG_PATH = Path("./src/configs/sample_config.toml")
 CONFIG = toml.load(CONFIG_PATH)
 VALUE_KEY = "__xarray_dataarray_variable__"
 N_TIMESTEP_SAMPLES = 100   # number of timesteps to evaluate along the schedule
-N_IMAGE_SAMPLES = 100      # number of images to average similarity over
+N_IMAGE_SAMPLES = 10      # number of images to average similarity over
 
 BETA_START = 1e-4
 BETA_END = 2e-2
@@ -24,9 +24,16 @@ TIMESTEPS = 1000
 POOL_KERNEL = 8   # spatial pooling kernel size; set to None to disable pooling
 
 SCHEDULES = [
-    "linear",
+    # "linear",
     "cosine",
-    "exponential",
+    # "cosine02",
+    # "exponential",
+    # "laplace",
+    # "laplace1010",
+    # "laplace0000",
+    # "quadratic",
+    # "sigmoid",
+    # "step",
 ]
 
 
@@ -57,8 +64,51 @@ def noise_schedule(
         alphas_cumprod = alphas_cumprod / alphas_cumprod[0]
         betas = 1 - (alphas_cumprod[1:] / alphas_cumprod[:-1])
         betas = np.clip(betas, a_min=0, a_max=0.999)
+        alphas = 1.0 - betas
+        alpha_bars = alphas_cumprod[1:]  # Use the analytic values directly!
+        return betas, alphas, alpha_bars
+    elif schedule == "cosine02":
+        s = 0.008
+        t = np.linspace(0, timesteps, timesteps + 1)
+        alphas_cumprod = np.cos(((t / timesteps) + s) / (1 + s) * np.pi * 0.5) ** 2
+        alphas_cumprod = alphas_cumprod / alphas_cumprod[0]
+        betas = 1 - (alphas_cumprod[1:] / alphas_cumprod[:-1])
+        betas = np.clip(betas, a_min=0, a_max=0.02)
     elif schedule == "exponential":
         betas = np.logspace(np.log10(beta_start), np.log10(beta_end), timesteps)
+    elif schedule == "laplace":
+        mu = 0.5
+        b = 0.5
+        t = np.linspace(0, timesteps - 1, timesteps)
+        betas = (1 / (2 * b)) * np.exp(-np.abs(t / timesteps - mu) / b)
+        betas = np.clip(betas, a_min=0, a_max=0.999)
+    elif schedule == "laplace1010":
+        mu = 10.0
+        b = 10.0
+        t = np.linspace(0, timesteps - 1, timesteps)
+        betas = (1 / (2 * b)) * np.exp(-np.abs(t / timesteps - mu) / b)
+        betas = np.clip(betas, a_min=0, a_max=0.999)
+    elif schedule == "laplace0000":
+        mu = 0.001
+        b = 0.001
+        t = np.linspace(0, timesteps - 1, timesteps)
+        betas = (1 / (2 * b)) * np.exp(-np.abs(t / timesteps - mu) / b)
+        betas = np.clip(betas, a_min=0, a_max=0.999)
+    elif schedule == "quadratic":
+        t = np.linspace(0, timesteps - 1, timesteps)
+        betas = beta_start + (beta_end - beta_start) * (t / (timesteps - 1)) ** 2
+    elif schedule == "sigmoid":
+        t = np.linspace(0, timesteps - 1, timesteps)
+        betas = beta_start + (beta_end - beta_start) / (
+            1 + np.exp(-12 * (t / (timesteps - 1) - 0.5))
+        )
+    elif schedule == "step":
+        betas = np.full(timesteps, beta_start)
+        step_size = timesteps // 10
+        for i in range(1, 10):
+            betas[i * step_size : (i + 1) * step_size] = beta_start + (
+                (beta_end - beta_start) * i / 10
+            )
     else:
         raise ValueError(f"Unknown noise schedule: {schedule}")
 
@@ -87,46 +137,60 @@ def test_noise_schedule():
         betas, alphas, alpha_bars = noise_schedule(
             schedule, TIMESTEPS, BETA_START, BETA_END
         )
-        sqrt_alpha_bars = np.sqrt(alpha_bars)
-        sqrt_one_minus_alpha_bars = np.sqrt(1.0 - alpha_bars)
+        # sqrt_alpha_bars = np.sqrt(alpha_bars)
+        # sqrt_one_minus_alpha_bars = np.sqrt(1.0 - alpha_bars)
 
-        def q_sample(x0: np.ndarray, t: int, noise: np.ndarray) -> np.ndarray:
-            return sqrt_alpha_bars[t] * x0 + sqrt_one_minus_alpha_bars[t] * noise
+        # def q_sample(x0: np.ndarray, t: int, noise: np.ndarray) -> np.ndarray:
+        #     return sqrt_alpha_bars[t] * x0 + sqrt_one_minus_alpha_bars[t] * noise
 
-        # shape: (N_IMAGE_SAMPLES, N_TIMESTEP_SAMPLES)
-        all_similarities = np.ones((N_IMAGE_SAMPLES, N_TIMESTEP_SAMPLES))
+        # # shape: (N_IMAGE_SAMPLES, N_TIMESTEP_SAMPLES)
+        # all_similarities = np.ones((N_IMAGE_SAMPLES, N_TIMESTEP_SAMPLES))
 
-        for img_idx, x0 in enumerate(images):
-            # optionally pool before similarity comparison
-            x0_repr = average_pool(x0, POOL_KERNEL) if POOL_KERNEL else x0
+        # for img_idx, x0 in enumerate(images):
+        #     # optionally pool before similarity comparison
+        #     x0_repr = average_pool(x0, POOL_KERNEL) if POOL_KERNEL else x0
 
-            for j in range(1, N_TIMESTEP_SAMPLES):
-                noise = np.random.randn(*x0.shape)
-                xt = q_sample(x0, ts[j], noise)
-                xt_repr = average_pool(xt, POOL_KERNEL) if POOL_KERNEL else xt
+        #     for j in range(1, N_TIMESTEP_SAMPLES):
+        #         noise = np.random.randn(*x0.shape)
+        #         xt = q_sample(x0, ts[j], noise)
+        #         xt_repr = average_pool(xt, POOL_KERNEL) if POOL_KERNEL else xt
 
-                all_similarities[img_idx, j] = cosine_similarity(
-                    [x0_repr.ravel(), xt_repr.ravel()]
-                )[0, 1]
+        #         all_similarities[img_idx, j] = cosine_similarity(
+        #             [x0_repr.ravel(), xt_repr.ravel()]
+        #         )[0, 1]
 
-        mean_sim = all_similarities.mean(axis=0)
-        std_sim = all_similarities.std(axis=0)
+        # mean_sim = all_similarities.mean(axis=0)
+        # std_sim = all_similarities.std(axis=0)
 
-        (line,) = ax_line.plot(ts, mean_sim, label=f"{schedule} schedule")
-        ax_line.fill_between(
-            ts,
-            mean_sim - std_sim,
-            mean_sim + std_sim,
-            alpha=0.2,
-            color=line.get_color(),
-        )
+        # (line,) = ax_line.plot(ts, mean_sim, label=f"{schedule} schedule")
+        # ax_line.fill_between(
+        #     ts,
+        #     mean_sim - std_sim,
+        #     mean_sim + std_sim,
+        #     alpha=0.2,
+        #     color=line.get_color(),
+        # )
 
-    pool_label = f"pool={POOL_KERNEL}×{POOL_KERNEL}" if POOL_KERNEL else "no pooling"
+        ax_line.plot(ts, betas[ts], label=f"betas")
+        ax_line.plot(ts, alphas[ts], label=f"alphas")
+        ax_line.plot(ts, alpha_bars[ts], label=f"alpha_bars")
+
     ax_line.legend()
     ax_line.set_xlabel("Timestep")
-    ax_line.set_ylabel("Cosine Similarity")
-    ax_line.set_title(
-        f"Noise Schedule — mean ± std over {N_IMAGE_SAMPLES} images ({pool_label})"
-    )
+    ax_line.set_ylabel("Value")
+    ax_line.set_title("Noise Schedule")
+    ax_line.set_ylim(0, 1e-4)
+
+    # pool_label = f"pool={POOL_KERNEL}×{POOL_KERNEL}" if POOL_KERNEL else "no pooling"
+    # ax_line.legend()
+    # ax_line.set_xlabel("Timestep")
+    # ax_line.set_ylabel("Cosine Similarity")
+    # ax_line.set_title(
+    #     f"Noise Schedule — mean ± std over {N_IMAGE_SAMPLES} images ({pool_label})"
+    # )
 
     return fig_line
+
+if __name__ == "__main__":
+    fig = test_noise_schedule()
+    fig.savefig("./cosine_vars.png", dpi=150)

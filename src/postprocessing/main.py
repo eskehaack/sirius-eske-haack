@@ -16,15 +16,15 @@ if __name__ == "__main__":
         # "r3i1p1f1"
     ]
 
-    # pg.save(
-    #     test_noise_schedule(), 
-    #     f"./figures/method/noise_schedule_similarity.png"
-    # )
-
     pg.save(
-        visualise_forward_process(), 
-        f"./figures/method/forward_process.png"
+        test_noise_schedule(), 
+        f"./figures/method/noise_schedule_similarity.png"
     )
+
+    # pg.save(
+        # visualise_forward_process(), 
+        # f"./figures/method/forward_process.png"
+    # )
 
     for member in members:
         # pg.save(

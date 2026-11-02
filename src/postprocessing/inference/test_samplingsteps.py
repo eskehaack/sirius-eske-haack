@@ -8,7 +8,7 @@ import torch.nn.functional as F
 import numpy as np
 import matplotlib.pyplot as plt
 
-from src.model import LitConditionalDDPM
+from src.models import LitConditionalDDPM
 from src.data_builders.data_utils import load_sample
 from src.postprocessing import plt_guide as pg
 
@@ -105,10 +105,12 @@ def main(
     member: str = "r1i1p1f1",
     date: str = "1951-01-01",
     config_path: str = "./src/configs/sample_config.toml", 
+    sample_type: str = "ddpm"
 ):
 
     out_dir = Path(f"./samples/{run_id}")
     out_dir = out_dir / f"{scenario}_{member}_{date.replace('-', '')}"
+    out_dir.mkdir(parents=True, exist_ok=True)
 
     model = load_checkpoint(run_id, checkpoint)
     config = toml.load(config_path)
@@ -159,17 +161,37 @@ def main(
     # ----------------------------------------------------
     # Sample
     # ----------------------------------------------------
-    with torch.no_grad():
-        steps = np.linspace(10, timesteps, num=10, dtype=int)
-        results = []
-        for num_steps in steps:
-            x_final = model.sample(condition, num_steps=num_steps)
-            x_crop = x_final[:, :, pad_x:-pad_x, pad_y:-pad_y]
-            results.append(F.mse_loss(x_crop, target).item())
-
     pg.setup()
     fig = plt.figure()
-    plt.plot(steps, results)
+
+    hparams = [
+        {"cfg_scale": 0.00},
+        {"cfg_scale": 0.25},
+        {"cfg_scale": 0.50},
+        {"cfg_scale": 0.75},
+        {"cfg_scale": 1.00},
+        {"cfg_scale": 2.00},
+    ]
+    steps = np.linspace(10, timesteps, num=10, dtype=int)
+
+    results = np.zeros((len(hparams), len(steps)))
+    with torch.no_grad():
+        for i, hparam in enumerate(hparams):    
+            for j, num_steps in enumerate(steps):
+                x_final = model.sample(condition, num_steps=num_steps, sample_type=sample_type, hparams=hparam)
+                x_crop = x_final[:, :, pad_x:-pad_x, pad_y:-pad_y]
+                loss = F.mse_loss(x_crop, target).item()
+                results[i, j] = loss
+                print(hparam, num_steps, loss)
+
+            plt.plot(steps, results[i], marker='o', label="; ".join(str(k) + "=" + str(v) for k, v in hparam.items()))
+
+            for i, val in enumerate(results[i]):
+                plt.annotate(f"{val:.2f}", (steps[i], val), textcoords='data')
+
+    np.save(out_dir / f"sampling_steps_vs_loss.npy", results)
+    
+    plt.legend()
     plt.title(f"Sampling Steps vs Loss")
     plt.xlabel("Sampling Steps")
     plt.ylabel("MSE Loss")
@@ -208,6 +230,10 @@ def parse_args():
         "--config_path", type=str, default="./src/configs/sample_config.toml", help="Path to the config file"
     )
 
+    parser.add_argument(
+        "--sample_type", type=str, default="ddpm", help="Type of sampling to use (ddim or ddpm)"
+    )
+
     return parser.parse_args()
 
 
@@ -221,4 +247,5 @@ if __name__ == "__main__":
         member=args.member,
         date=args.date,
         config_path=args.config_path,
+        sample_type=args.sample_type
     )

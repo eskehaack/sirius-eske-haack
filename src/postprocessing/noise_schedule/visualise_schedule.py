@@ -23,6 +23,10 @@ SCHEDULES = [
     "linear",
     "cosine",
     "exponential",
+    "laplace",
+    "quadratic",
+    "sigmoid",
+    "step",
 ]
 
 
@@ -35,7 +39,7 @@ def noise_schedule(
     if schedule == "linear":
         betas = np.linspace(beta_start, beta_end, timesteps)
     elif schedule == "cosine":
-        s = 0.001
+        s = 0.008
         t = np.linspace(0, timesteps, timesteps + 1)
         alphas_cumprod = np.cos(((t / timesteps) + s) / (1 + s) * np.pi * 0.5) ** 2
         alphas_cumprod = alphas_cumprod / alphas_cumprod[0]
@@ -43,13 +47,34 @@ def noise_schedule(
         betas = np.clip(betas, a_min=0, a_max=0.999)
     elif schedule == "exponential":
         betas = np.logspace(np.log10(beta_start), np.log10(beta_end), timesteps)
+    elif schedule == "laplace":
+        mu = 10
+        b = 10
+        t = np.linspace(0, timesteps - 1, timesteps)
+        betas = (1 / (2 * b)) * np.exp(-np.abs(t / timesteps - mu) / b)
+        betas = np.clip(betas, a_min=0, a_max=0.999)
+    elif schedule == "quadratic":
+        t = np.linspace(0, timesteps - 1, timesteps)
+        betas = beta_start + (beta_end - beta_start) * (t / (timesteps - 1)) ** 2
+    elif schedule == "sigmoid":
+        t = np.linspace(0, timesteps - 1, timesteps)
+        betas = beta_start + (beta_end - beta_start) / (
+            1 + np.exp(-12 * (t / (timesteps - 1) - 0.5))
+        )
+    elif schedule == "step":
+        betas = np.full(timesteps, beta_start)
+        step_size = timesteps // 10
+        for i in range(1, 10):
+            betas[i * step_size : (i + 1) * step_size] = beta_start + (
+                (beta_end - beta_start) * i / 10
+            )
     else:
         raise ValueError(f"Unknown noise schedule: {schedule}")
 
     alphas = 1.0 - betas
     alpha_bars = np.cumprod(alphas, axis=0)
-    assert len(betas) == timesteps, f"Length of betas ({len(betas)}) does not match timesteps ({timesteps}) for schedule {schedule}"
     return betas, alphas, alpha_bars
+
 
 
 def q_sample(
@@ -121,5 +146,5 @@ def visualise_forward_process():
 
 if __name__ == "__main__":
     fig = visualise_forward_process()
-    fig.savefig("forward_process.png", dpi=150)
+    fig.savefig("./test_forward_process.png", dpi=150)
     plt.show()
