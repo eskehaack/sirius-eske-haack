@@ -14,7 +14,7 @@ set -euo pipefail
 
 cd "/scratch/project_465002687/sirius/"
 
-SIF="/scratch/project_465002687/ec_earth/containers/dockerv4.sif"
+SIF="/scratch/project_465002687/ec_earth/containers/dockerv5.sif"
 
 pwd
 

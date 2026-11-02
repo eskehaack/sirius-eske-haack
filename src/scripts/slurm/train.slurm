@@ -4,10 +4,10 @@
 #SBATCH --partition=small-g
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --cpus-per-task=5
+#SBATCH --cpus-per-task=7
 #SBATCH --gpus-per-task=1
-#SBATCH --mem=32G
-#SBATCH --time=02:00:00
+#SBATCH --mem=128G
+#SBATCH --time=06:00:00
 #SBATCH --output=./hpc_outputs/%x-%j.out
 #SBATCH --error=./hpc_outputs/%x-%j.err
 
@@ -49,18 +49,21 @@ amd-smi version
 # --------------------------------------------------
 
 cd "/scratch/project_465002687/sirius/"
-SIF="/scratch/project_465002687/ec_earth/containers/dockerv4.sif"
+SIF="/scratch/project_465002687/ec_earth/containers/dockerv5.sif"
+CONFIG_PATH="./src/configs/larger_config.toml"
 
 srun --account=project_465002687 singularity exec \
     --bind /scratch/project_465002687 \
     "$SIF" \
     python -m src.train \
-        --config_path ./src/configs/sample_config.toml \
+        --config_path "$CONFIG_PATH" \
         --run_id "$SLURM_JOB_ID"
 
 srun --account=project_465002687 singularity exec \
     --bind /scratch/project_465002687 \
     "$SIF" \
     python -m src.sample \
+        --config_path "$CONFIG_PATH" \
         --run_id "$SLURM_JOB_ID" \
-        --date "1970-01-01"
+        --timesteps 500 \
+        --date "1970-03-01"

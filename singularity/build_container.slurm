@@ -28,4 +28,4 @@ export NUMBA_CACHE_DIR="/tmp/$USER/numba_cache"
 
 cd /scratch/project_465002687/sirius
 
-srun --account=project_465002687 singularity build /scratch/project_465002687/ec_earth/containers/dockerv4.sif singularity/update.def
+srun --account=project_465002687 singularity build /scratch/project_465002687/ec_earth/containers/dockerv5.sif singularity/update.def

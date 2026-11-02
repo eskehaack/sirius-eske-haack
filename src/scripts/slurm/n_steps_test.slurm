@@ -7,7 +7,7 @@
 #SBATCH --cpus-per-task=1
 #SBATCH --gpus-per-task=1
 #SBATCH --mem=32G
-#SBATCH --time=00:10:00
+#SBATCH --time=02:00:00
 #SBATCH --output=./hpc_outputs/%x-%j.out
 #SBATCH --error=./hpc_outputs/%x-%j.err
 
@@ -49,14 +49,16 @@ amd-smi version
 # --------------------------------------------------
 
 cd "/scratch/project_465002687/sirius/"
-SIF="/scratch/project_465002687/ec_earth/containers/dockerv4.sif"
+SIF="/scratch/project_465002687/ec_earth/containers/dockerv5.sif"
 
 srun --account=project_465002687 singularity exec \
     --bind /scratch/project_465002687 \
     "$SIF" \
     python ./src/postprocessing/inference/test_samplingsteps.py \
-        --run_id "22780529" \
+        --run_id "23111122" \
         --timesteps 1000 \
-        --date "1970-01-01" \
-        --scenario "historical" \
-        --member "r1i1p1f1"
+        --date "2020-03-01" \
+        --scenario "ssp126" \
+        --member "r1i1p1f1" \
+        --sample_type "ddpm" \
+        --config_path "./src/configs/sample_config.toml"
