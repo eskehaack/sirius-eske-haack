@@ -1,9 +1,9 @@
 [training]
-batch_size = 4
-max_epochs = 10
-lr = 5e-5
+batch_size = 8
+max_epochs = 60
+lr = 1e-4
 base_channels = 64
-num_workers = 4
+num_workers = 6
 target_channels = 4
 condition_channels = 20
 checkpoint_dir = "./checkpoints/"
@@ -12,7 +12,8 @@ schedule = "cosine"
 channel_mults = [1, 2, 4, 8]
 checkpoint_every_n_steps = 0
 log_every_n_step = 10
-model = "conditional_ddpm"
+model = "edm"
+attention = false
 
 [dates]
 train_blocks = [
