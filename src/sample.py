@@ -7,13 +7,14 @@ import xarray as xr
 import torch
 import torch.nn.functional as F
 import numpy as np
-import matplotlib.pyplot as plt
 
-from src.model import LitConditionalDDPM, LitConditionalUNet
+import lightning.pytorch as pl
+
+from src.models import MODELREGISTRY
 from src.data_builders.data_utils import load_sample
 from src.postprocessing.inference.plot_samples import plot_predictions, plot_prediction_distribution
 
-def load_checkpoint(run_id: str, checkpoint: str = "last") -> LitConditionalDDPM:
+def load_checkpoint(run_id: str, checkpoint: str = "last") -> pl.LightningModule:
     # ----------------------------------------------------
     # Load model
     # ----------------------------------------------------
@@ -27,15 +28,11 @@ def load_checkpoint(run_id: str, checkpoint: str = "last") -> LitConditionalDDPM
     else:
         hparams = yaml.safe_load(open(log_path, "r"))
         m_spec = hparams.get('model', "conditional_ddpm")
-    mclass = {
-        "conditional_ddpm": LitConditionalDDPM,
-        "conditional_unet": LitConditionalUNet,
-    }
-
+    print(f"Loading model {m_spec} from checkpoint: {checkpoint_path}")
     if not checkpoint_path.exists():
         raise FileNotFoundError(f"Checkpoint file not found: {checkpoint_path}\nModel training did not complete as expected.")
     
-    model = mclass[m_spec].load_from_checkpoint(checkpoint_path)
+    model = MODELREGISTRY[m_spec].load_from_checkpoint(checkpoint_path)
     model.eval()
     model.to(device)
     return model
@@ -111,6 +108,7 @@ def main(
     member: str = "r1i1p1f1",
     date: str = "1951-01-01",
     config_path: str = "./src/configs/sample_config.toml", 
+    sample_type: str = "ddpm"
 ):
 
     out_dir = Path(f"./samples/{run_id}")
@@ -138,6 +136,7 @@ def main(
     # Stack all variables into (1, C, H, W) tensors
     x = torch.from_numpy(ds_to_channels(data['predictors'])
     ).unsqueeze(0).float().to(model.device)  # (1, C_pred, H, W)
+    raw_predictors = x.detach().cpu().clone()  # Keep a copy of the raw predictors for later use
 
     static_zarr = xr.open_dataset(config['preprocessing']['static_output'])
     static = torch.from_numpy(ds_to_channels(static_zarr)
@@ -146,37 +145,37 @@ def main(
     target_shape = data['targets']['lon'].shape
     target_vars = ["tas", "tasmin", "tasmax", "pr"]
 
-
     stats = xr.open_dataset(config['preprocessing']['normalization_stats_path'])
     x = normalize(x, stats)
-    condition, (pad_x, pad_y) = get_resized(model.image_size, target_shape, x, static)
+    pad_x = model.pad_x
+    pad_y = model.pad_y
+    condition, _ = get_resized(model.image_size, target_shape, x, static)
     condition = condition.to(model.device)
-
-    condition[condition != condition] = 0.0  # Replace NaNs with zeros
-
-    # ----------------------------------------------------
+    condition[condition != condition] = 0.0
+    
     # Sample
-    # ----------------------------------------------------
     with torch.no_grad():
         prediction = torch.concat([
             model.sample(
                 condition,
                 num_steps=timesteps,
+                sample_type=sample_type,
+                hparams={"cfg_scale": 100.0}
             )
             for _ in range(ensemble_size)
         ], dim=0)
 
-    # Undo normalization
-    prediction = unnormalize(prediction, stats, target_vars)
-    # Crop back to original size (guard against pad == 0, where slice [0:-0] is empty)
+    # ✅ Crop FIRST (before unnormalize), so padded zeros never get shifted by mean
     prediction = prediction[
         :, :,
         pad_x : prediction.shape[2] - pad_x if pad_x > 0 else None,
         pad_y : prediction.shape[3] - pad_y if pad_y > 0 else None,
     ]
+
+    # ✅ Then unnormalize on the correctly-sized spatial domain
+    prediction = unnormalize(prediction, stats, target_vars)
     prediction = prediction.cpu()
 
-    # prediction here is the residual (model output), save before unresidualising
     res_prediction = prediction.detach().cpu()
     abs_prediction = unresidualise(data['regridded'], prediction, target_vars).cpu()
 
@@ -187,6 +186,8 @@ def main(
     out_dir.mkdir(exist_ok=True, parents=True)
     np.save(out_dir / f"res_prediction_{ensemble_size}_{timesteps}.npy", res_prediction.numpy())
     np.save(out_dir / f"abs_prediction_{ensemble_size}_{timesteps}.npy", abs_prediction.numpy())
+    if not (out_dir / f"raw_predictors.npy").exists():
+        np.save(out_dir / f"raw_predictors.npy", raw_predictors.numpy())
 
     plot_predictions(
         abs_prediction, 
@@ -248,6 +249,10 @@ def parse_args():
         "--config_path", type=str, default="./src/configs/sample_config.toml", help="Path to the config file"
     )
 
+    parser.add_argument(
+        "--sample_type", type=str, default="ddpm", help="Type of sampling to use (ddim or ddpm)"
+    )
+
     return parser.parse_args()
 
 
@@ -262,4 +267,5 @@ if __name__ == "__main__":
         member=args.member,
         date=args.date,
         config_path=args.config_path,
+        sample_type=args.sample_type
     )
