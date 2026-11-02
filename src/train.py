@@ -9,7 +9,7 @@ from lightning.pytorch.loggers import TensorBoardLogger
 
 from src.data_builders.dataloader import DataModule
 from src.data_builders.smhi_dataloader import parse_config
-from src.model import LitConditionalDDPM, LitConditionalUNet
+from src.models import MODELREGISTRY
 from src.callbacks.device_logger import AMDGPUMonitor
 
 
@@ -32,6 +32,7 @@ def train_ddpm(run_id: str, config_path: str = "./src/configs/training_config.to
     channel_mults = tuple(config["channel_mults"])
     checkpoint_every_n_steps = None if int(config["checkpoint_every_n_steps"]) == 0 else int(config["checkpoint_every_n_steps"])
     log_every_n_step = int(config["log_every_n_step"])
+    attention = bool(config["attention"])
     model = str(config["model"])
 
     datamodule = DataModule(
@@ -40,11 +41,7 @@ def train_ddpm(run_id: str, config_path: str = "./src/configs/training_config.to
         config_path=config_path,
     )
 
-    model_types = {
-        "conditional_ddpm": LitConditionalDDPM,
-        "conditional_unet": LitConditionalUNet
-    }
-    model = model_types[model](
+    model = MODELREGISTRY[model](
         target_channels=target_channels,
         condition_channels=condition_channels,
         base_channels=base_channels,
@@ -52,6 +49,7 @@ def train_ddpm(run_id: str, config_path: str = "./src/configs/training_config.to
         timesteps=timesteps,
         schedule=schedule,
         lr=lr,
+        attention=attention
     )
 
     model.save_hyperparameters(config)
@@ -72,11 +70,12 @@ def train_ddpm(run_id: str, config_path: str = "./src/configs/training_config.to
         accelerator="auto",
         devices="auto",
         precision="16-mixed",
+        accumulate_grad_batches=4,
         callbacks=[
             checkpoint_callback,
             LearningRateMonitor(logging_interval="step"),
             AMDGPUMonitor(interval=1.0, device_index=0),
-            EarlyStopping(monitor="val_loss", mode="min", min_delta=0.001, patience=4)
+            EarlyStopping(monitor="val_loss", mode="min", min_delta=0.0, patience=8)
         ],
         logger=TensorBoardLogger(save_dir="logs", name=str(run_id)),
         log_every_n_steps=log_every_n_step,
