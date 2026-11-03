@@ -8,8 +8,8 @@
 #SBATCH --gpus-per-task=1
 #SBATCH --mem=32G
 #SBATCH --time=02:00:00
-#SBATCH --output=./hpc_outputs/%x-%j.out
-#SBATCH --error=./hpc_outputs/%x-%j.err
+#SBATCH --output=./hpc_outputs/tests/%x-%j.out
+#SBATCH --error=./hpc_outputs/tests/%x-%j.err
 
 set -euo pipefail
 

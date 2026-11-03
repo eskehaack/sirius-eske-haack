@@ -7,8 +7,8 @@
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=128G
 #SBATCH --time=02:00:00
-#SBATCH --output=./hpc_outputs/%x-%j.out
-#SBATCH --error=./hpc_outputs/%x-%j.err
+#SBATCH --output=./hpc_outputs/preprocess/%x-%j.out
+#SBATCH --error=./hpc_outputs/preprocess/%x-%j.err
 
 set -euo pipefail
 
