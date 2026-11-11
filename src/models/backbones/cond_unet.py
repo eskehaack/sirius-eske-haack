@@ -140,27 +140,26 @@ class ConditionalUNet(nn.Module):
 
     def __init__(
         self,
-        target_channels: int = 1,
-        condition_channels: int = 1,
-        base_channels: int = 64,
-        channel_mults: Sequence[int] = (1, 2, 4, 8),
-        time_dim: int = 256,
-        dropout: float = 0.0,
-        attention: bool = False,
+        hyperparameters: dict = {},
     ):
         super().__init__()
 
-        self.target_channels = target_channels
-        self.condition_channels = condition_channels
-        self.attention = attention
+        self.target_channels = hyperparameters.get("target_channels", 4)
+        self.condition_channels = hyperparameters.get("condition_channels", 20)
+        self.attention = hyperparameters.get("attention", False)
 
-        in_channels = target_channels + condition_channels
+        in_channels = self.target_channels + self.condition_channels
+        self.time_dim = hyperparameters.get("time_dim", 256)
+
+        base_channels = hyperparameters.get("base_channels", 64)
+        channel_mults = hyperparameters.get("channel_mults", [1, 2, 4, 8])
+        self.dropout = hyperparameters.get("dropout", 0.0)
 
         self.time_mlp = nn.Sequential(
-            SinusoidalTimeEmbedding(time_dim),
-            nn.Linear(time_dim, time_dim * 4),
+            SinusoidalTimeEmbedding(self.time_dim),
+            nn.Linear(self.time_dim, self.time_dim * 4),
             nn.SiLU(),
-            nn.Linear(time_dim * 4, time_dim),
+            nn.Linear(self.time_dim * 4, self.time_dim),
         )
 
         chs = [base_channels * m for m in channel_mults]
@@ -170,26 +169,26 @@ class ConditionalUNet(nn.Module):
         self.downs = nn.ModuleList()
         in_ch = chs[0]
         for out_ch in chs:
-            self.downs.append(DownBlock(in_ch, out_ch, time_dim, dropout))
+            self.downs.append(DownBlock(in_ch, out_ch, self.time_dim, self.dropout))
             in_ch = out_ch
 
-        self.mid1 = ResBlock(chs[-1], chs[-1], time_dim, dropout)
+        self.mid1 = ResBlock(chs[-1], chs[-1], self.time_dim, self.dropout)
         if self.attention:
             self.mid_attn = BottleneckAttention(chs[-1], num_heads=8)
-        self.mid2 = ResBlock(chs[-1], chs[-1], time_dim, dropout)
+        self.mid2 = ResBlock(chs[-1], chs[-1], self.time_dim, self.dropout)
 
         self.ups = nn.ModuleList()
         rev_chs = list(reversed(chs))
         in_ch = rev_chs[0]
         for skip_ch in rev_chs:
             out_ch = skip_ch
-            self.ups.append(UpBlock(in_ch, skip_ch, out_ch, time_dim, dropout))
+            self.ups.append(UpBlock(in_ch, skip_ch, out_ch, self.time_dim, self.dropout))
             in_ch = out_ch
 
         self.out = nn.Sequential(
             nn.GroupNorm(8, chs[0]),
             nn.SiLU(),
-            nn.Conv2d(chs[0], target_channels, 3, padding=1),
+            nn.Conv2d(chs[0], self.target_channels, 3, padding=1),
         )
 
     def forward(

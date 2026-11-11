@@ -3,99 +3,16 @@
 # HuggingFace diffusers UNet2DModel, incorporating CFG, masked loss, attention,
 # multiple timesteps per sample, and a fixed cosine annealing scheduler.
 
-import math
+from src.callbacks.timer import log_time
 import torch
 import torch.nn.functional as F
-import lightning.pytorch as pl
 
-from diffusers import UNet2DModel
-from diffusers.schedulers import DDPMScheduler, DDIMScheduler
+from diffusers.schedulers import DDPMScheduler, DDIMScheduler, EDMDPMSolverMultistepScheduler
 
-
-class ClimateUNet(torch.nn.Module):
-    """
-    Wraps diffusers UNet2DModel to support channel-concatenation conditioning.
-
-    The noisy target (4 channels) and condition (20 channels) are concatenated
-    along the channel dimension before being passed to the UNet. The UNet is
-    configured with attention at the bottleneck and intermediate resolutions,
-    replacing the attention-free custom UNet.
-
-    Args:
-        target_channels:    Number of target output channels (default: 4).
-        condition_channels: Number of conditioning input channels (default: 20).
-        base_channels:      Base channel width (default: 128; wider than before
-                            to compensate for removing explicit skip connections
-                            from the old architecture).
-        channel_mults:      Channel multipliers per resolution level.
-        attention_levels:   Which resolution levels get self-attention.
-                            0 = highest resolution, len-1 = bottleneck.
-        num_heads:          Number of attention heads.
-        dropout:            Dropout probability inside ResBlocks.
-    """
-
-    def __init__(
-        self,
-        target_channels: int = 4,
-        condition_channels: int = 20,
-        base_channels: int = 128,
-        channel_mults: tuple = (1, 2, 4, 8),
-        attention_levels: tuple = (2, 3),   # attend at 2nd and bottleneck levels
-        num_heads: int = 8,
-        dropout: float = 0.0,
-    ):
-        super().__init__()
-
-        self.target_channels = target_channels
-        self.condition_channels = condition_channels
-        in_channels = target_channels + condition_channels
-
-        block_out_channels = tuple(base_channels * m for m in channel_mults)
-
-        # Attention is enabled at the levels listed in attention_levels.
-        # diffusers expects a tuple of booleans, one per resolution level.
-        attention_head_dim = block_out_channels[-1] // num_heads
-        down_block_types = []
-        up_block_types = []
-        for i in range(len(channel_mults)):
-            if i in attention_levels:
-                down_block_types.append("AttnDownBlock2D")
-                up_block_types.insert(0, "AttnUpBlock2D")
-            else:
-                down_block_types.append("DownBlock2D")
-                up_block_types.insert(0, "UpBlock2D")
-
-        self.unet = UNet2DModel(
-            in_channels=in_channels,
-            out_channels=target_channels,
-            block_out_channels=block_out_channels,
-            down_block_types=tuple(down_block_types),
-            up_block_types=tuple(up_block_types),
-            attention_head_dim=attention_head_dim,
-            norm_num_groups=8,
-            dropout=dropout,
-            # Time embedding is handled internally by diffusers
-        )
-
-    def forward(
-        self,
-        x_t: torch.Tensor,
-        condition: torch.Tensor,
-        t: torch.Tensor,
-    ) -> torch.Tensor:
-        """
-        Args:
-            x_t:       Noisy target,  [B, target_channels, H, W]
-            condition: Condition,     [B, condition_channels, H, W]
-            t:         Timesteps,     [B]
-        Returns:
-            Predicted noise,          [B, target_channels, H, W]
-        """
-        x = torch.cat([x_t, condition], dim=1)
-        return self.unet(x, t).sample
+from src.models.base_diffusion import LitConditionalDiffusion
 
 
-class LitClimateDiffusion(pl.LightningModule):
+class LitClimateDiffusion(LitConditionalDiffusion):
     """
     PyTorch Lightning module for DDPM-based climate super-resolution.
 
@@ -133,98 +50,63 @@ class LitClimateDiffusion(pl.LightningModule):
 
     def __init__(
         self,
-        target_channels: int = 4,
-        condition_channels: int = 20,
-        timesteps: int = 1000,
-        image_size: int = 432,
-        cfg_dropout: float = 0.1,
-        cfg_scale: float = 2.0,
-        lr: float = 1e-4,
-        eta_min: float = 1e-6,
-        max_epochs: int = 200,
-        base_channels: int = 128,
-        channel_mults: tuple = (1, 2, 4, 8),
-        dropout: float = 0.1,
-        use_ddim: bool = True,
-        ddim_steps: int = 200,
-        # Compatibility with older configs
-        beta_start: float = 1e-4,
-        beta_end: float = 2e-2,
-        attention: bool = False,
-        schedule: str = "linear",
+        backbone: str = "diffusers_unet",
+        hyperparameters: dict = {},
     ):
-        super().__init__()
-        self.save_hyperparameters()
-
-        self.model = ClimateUNet(
-            target_channels=target_channels,
-            condition_channels=condition_channels,
-            base_channels=base_channels,
-            channel_mults=channel_mults,
-            dropout=dropout,
-        )
+        super().__init__(backbone, hyperparameters)
 
         # DDPM scheduler — used during training and DDPM inference
         self.ddpm_scheduler = DDPMScheduler(
-            num_train_timesteps=timesteps,
+            num_train_timesteps=self.timesteps,
             beta_schedule="squaredcos_cap_v2",   # equivalent to your cosine schedule
             clip_sample=False,
+            beta_start=hyperparameters.get("beta_start", 0.0001),
+            beta_end=hyperparameters.get("beta_end", 0.02)
         )
 
         # DDIM scheduler — faster inference, same noise schedule
         self.ddim_scheduler = DDIMScheduler(
-            num_train_timesteps=timesteps,
+            num_train_timesteps=self.timesteps,
             beta_schedule="squaredcos_cap_v2",
             clip_sample=False,
+            beta_start=hyperparameters.get("beta_start", 0.0001),
+            beta_end=hyperparameters.get("beta_end", 0.02)
         )
 
-        # Valid spatial region — used to mask out zero-padded borders in loss
-        self.initial_target_shape = (412, 424)
-        self.pad_x = (image_size - self.initial_target_shape[0]) // 2
-        self.pad_y = (image_size - self.initial_target_shape[1]) // 2
-        self.pad_tuple = (self.pad_y, self.pad_y, self.pad_x, self.pad_x)
+        self.edm_scheduler = EDMDPMSolverMultistepScheduler(
+            num_train_timesteps=self.timesteps,
+            sigma_min=hyperparameters.get("sigma_min", 0.002),
+            sigma_max=hyperparameters.get("sigma_max", 160.0),
+            sigma_data=hyperparameters.get("sigma_data", 1.0),
+            solver_order=2,
+        )
 
-        self.static = None  # Allocation
-        self.image_size = image_size
-        self.lr = lr
+        self.cfg_dropout = hyperparameters.get("cfg_dropout", 0.1)
 
     # ------------------------------------------------------------------
     # Training
     # ------------------------------------------------------------------
 
-    def _masked_loss(
-        self,
-        noise_pred: torch.Tensor,
-        noise: torch.Tensor,
-    ) -> torch.Tensor:
-        """MSE loss computed only over the valid (non-padded) spatial region."""
-        return F.mse_loss(
-            noise_pred[:, 0, self.pad_y:-self.pad_y, self.pad_x:-self.pad_x],
-            noise[:, 0, self.pad_y:-self.pad_y, self.pad_x:-self.pad_x],
-        )
-
+    @log_time
     def training_step(self, batch, batch_idx):
         x0, condition = self._load_batch(batch)
         B = x0.shape[0]
 
-        # --- Select only the tas condition ---
-        condition = self._select_conditions(condition, index=0)
-
         # --- Classifier-free guidance: randomly zero the condition ---
-        if self.hparams.cfg_dropout > 0.0:
-            drop_mask = torch.rand(B, 1, 1, 1, device=condition.device)
-            drop_mask = (drop_mask >= self.hparams.cfg_dropout).float()
+        if self.cfg_dropout > 0.0:
+            drop_mask = torch.rand(B, 1, 1, 1, device=self.device)
+            drop_mask = (drop_mask >= self.cfg_dropout).float()
             condition = condition * drop_mask
 
         t = torch.randint(
-            0, self.hparams.timesteps, (B,), device=x0.device
+            0, self.timesteps, (B,), device=x0.device
         )
         noise = torch.randn_like(x0)
 
         x_t = self.ddpm_scheduler.add_noise(x0, noise, t)
         noise_pred = self.model(x_t, condition, t)
 
-        loss = self._masked_loss(noise_pred, noise)
+        loss = F.mse_loss(self._crop(noise_pred), self._crop(noise))
         self.log("train_loss", loss, prog_bar=True, on_step=True, on_epoch=True)
         return loss
 
@@ -232,16 +114,14 @@ class LitClimateDiffusion(pl.LightningModule):
         x0, condition = self._load_batch(batch)
         B = x0.shape[0]
 
-        condition = self._select_conditions(condition, index=0)  # Use only tas for conditioning
-
         t = torch.randint(
-            0, self.hparams.timesteps, (B,), device=x0.device
+            0, self.timesteps, (B,), device=x0.device
         )
         noise = torch.randn_like(x0)
         x_t = self.ddpm_scheduler.add_noise(x0, noise, t)
         noise_pred = self.model(x_t, condition, t)
 
-        loss = self._masked_loss(noise_pred, noise)
+        loss = F.mse_loss(self._crop(noise_pred), self._crop(noise))
         self.log("val_loss", loss, prog_bar=True, on_epoch=True)
         return loss
 
@@ -249,18 +129,13 @@ class LitClimateDiffusion(pl.LightningModule):
     # Inference / sampling
     # ------------------------------------------------------------------
 
-    @torch.no_grad()
+    @torch.inference_mode()
     def sample(
         self,
         condition: torch.Tensor,
-        n_samples: int = 1,
-        use_ddim: bool | None = None,
-        cfg_scale: float | None = None,
-        # Compatibility with older configs
-        num_steps: int | None = None,
-        eta: float | None = None,
-        shape: tuple | None = None,
-        sample_type: str | None = None,
+        num_steps: int = 1000,
+        hparams: dict = {},
+        
     ) -> torch.Tensor:
         """
         Draw samples from the model given a conditioning input.
@@ -268,35 +143,34 @@ class LitClimateDiffusion(pl.LightningModule):
         Args:
             condition:  [1, condition_channels, H, W] or
                         [B, condition_channels, H, W]
-            n_samples:  Number of ensemble members to draw.
-            use_ddim:   Override instance default.
-            cfg_scale:  Override instance default. Set to 1.0 to disable CFG.
+            n_steps:    Number of steps to take in the sampling process.
+            hyperparameters: Dictionary of additional hyperparameters, including:
 
         Returns:
             Predicted residuals, [n_samples, target_channels, H, W]
         """
-        use_ddim = use_ddim if use_ddim is not None else self.hparams.use_ddim
-        cfg_scale = cfg_scale if cfg_scale is not None else self.hparams.cfg_scale
-        device = next(self.parameters()).device
+        self.eval()
+        
+        use_ddim = hparams.get("use_ddim", False)
+        cfg_scale = hparams.get("cfg_scale", 1.0)
+        n_samples = hparams.get("n_samples", 1)
+
+        device = self.device
 
         # Expand condition to match n_samples
         if condition.shape[0] == 1:
             condition = condition.expand(n_samples, -1, -1, -1)
 
         B, _, H, W = condition.shape
-        condition = self._select_conditions(condition, index=0)  # Use only tas for conditioning
 
         # Null condition for CFG
         null_condition = torch.zeros_like(condition)
 
         # Start from pure Gaussian noise
-        x = torch.randn(B, self.hparams.target_channels, H, W, device=device)
+        x = torch.randn(B, self.target_channels, H, W, device=device)
 
         scheduler = self.ddim_scheduler if use_ddim else self.ddpm_scheduler
-        if use_ddim:
-            scheduler.set_timesteps(self.hparams.ddim_steps)
-        else:
-            scheduler.set_timesteps(self.hparams.timesteps)
+        scheduler.set_timesteps(num_steps)
 
         for t_val in scheduler.timesteps:
             t_batch = torch.full((B,), t_val, device=device, dtype=torch.long)
@@ -316,93 +190,3 @@ class LitClimateDiffusion(pl.LightningModule):
             x = scheduler.step(noise_pred, t_val, x).prev_sample
 
         return x
-
-    # ------------------------------------------------------------------
-    # Optimizer / scheduler
-    # ------------------------------------------------------------------
-
-    def configure_optimizers(self):
-        optimizer = torch.optim.AdamW(
-            self.parameters(),
-            lr=self.hparams.lr,
-            weight_decay=1e-4,
-        )
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-            optimizer,
-            T_max=self.hparams.max_epochs,
-            eta_min=self.hparams.eta_min,   # fixed: eta_min << lr
-        )
-        return [optimizer], [{"scheduler": scheduler, "interval": "epoch"}]
-
-    # ------------------------------------------------------------------
-    # Helpers
-    # ------------------------------------------------------------------
-
-    def _load_batch(self, batch):
-        x, y, static, _ = batch
-
-        x0 = torch.stack(
-            list(y.values()),
-            dim=1,
-        )
-
-        x0 = F.pad(
-            x0,
-            pad=self.pad_tuple,
-            mode="constant",
-            value=0.0,
-        )
-
-        # Interpolate the condition to match the target shape
-        condition = F.interpolate(
-            x,
-            size=self.initial_target_shape,
-            mode="bilinear",
-            align_corners=False,
-        )
-        # Then pad to meet model requirements
-        condition = F.pad(
-            condition,
-            pad=self.pad_tuple,
-            mode="constant",
-            value=0.0,
-        )
-
-        # Only interpolate static once and store it for future use
-        if self.static is None:
-            # Collapse the batch dimension to allow for broadcasting with other batch sizes
-            static = static[0] # Get rid of batch dimension
-            static = static.unsqueeze(0)  # Add batch dimension back
-
-            static = F.interpolate(
-                static,
-                size=self.initial_target_shape,
-                mode="bilinear",
-                align_corners=False,
-            )
-            self.static = F.pad(
-                static,
-                pad=self.pad_tuple,
-                mode="constant",
-                value=0.0,
-            )
-
-        static = self.static.expand(condition.size(0), -1, -1, -1)  # Expand to match batch size
-        condition = torch.cat([condition, static], dim=1)
-
-        return x0, condition
-
-    def _select_conditions(self, condition: torch.Tensor, index: int) -> torch.Tensor:
-        """
-        Select specific conditions from the condition tensor based on provided indices.
-
-        Args:
-            condition:  [B, condition_channels, H, W]
-            index:      Index of the condition to select from the condition channels.
-
-        Returns:
-            Selected conditions: [B, selected_channels, H, W]
-        """
-        sel_condition = torch.zeros_like(condition)
-        sel_condition[:, index, :, :] = condition[:, index, :, :]
-        return sel_condition

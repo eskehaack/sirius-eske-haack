@@ -34,6 +34,7 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.nn.attention import SDPBackend, sdpa_kernel
 
 
 # ---------------------------------------------------------------------------
@@ -74,6 +75,112 @@ class SinusoidalEmbedding(nn.Module):
         return torch.cat([args.sin(), args.cos()], dim=-1)   # (B, dim)
 
 
+class CosineAttention(nn.Module):
+    """
+    From: https://github.com/vinuni-vishc/Few-Shot-Cosine-Transformer
+    Presented in: Enhancing Few-Shot Image Classification With Cosine Transformer (https://ieeexplore.ieee.org/document/10190567)
+    """
+    def __init__(self, dim, heads, dim_head, variant):
+        super().__init__()
+        inner_dim = heads * dim_head
+        project_out = not(heads == 1 and dim_head == dim)
+        
+        self.heads = heads
+        self.scale = dim_head ** -0.5
+        self.sm = nn.Softmax(dim = -1)
+        self.variant = variant
+        self.input_linear = nn.Sequential(
+            nn.LayerNorm(dim),
+            nn.Linear(dim, inner_dim, bias = False))
+        
+        self.output_linear = nn.Linear(inner_dim, dim) if project_out else nn.Identity()
+
+    def cosine_distance(self, x1, x2):
+        '''
+        x1      =  [b, h, n, k]
+        x2      =  [b, h, k, m]
+        output  =  [b, h, n, m]
+        '''
+        dots = torch.matmul(x1, x2)
+        scale = torch.einsum('bhi, bhj -> bhij', 
+                (torch.norm(x1, 2, dim = -1), torch.norm(x2, 2, dim = -2)))
+        return (dots / scale)
+        
+    def forward(self, q, k, v):
+        f_q, f_k, f_v = map(
+            lambda t: self.input_linear(t)
+                .reshape(t.shape[0], t.shape[1], self.heads, -1)  # (q, n, h*d) -> (q, n, h, d)
+                .permute(2, 0, 1, 3), # (q, n, h, d) -> (h, q, n, d)
+            (q, k, v)
+        )   
+        
+        if self.variant == "cosine":
+            dots = self.cosine_distance(f_q, f_k.transpose(-1, -2)) # (h, q, n, 1)
+            out = torch.matmul(dots, f_v) # (h, q, n, d_h)
+        
+        else: # self.variant == "softmax"
+            dots = torch.matmul(f_q, f_k.transpose(-1, -2)) * self.scale            
+            out = torch.matmul(self.sm(dots), f_v)
+        
+        out = out.permute(1, 2, 0, 3).reshape(out.shape[1], out.shape[2], -1) # (q, n, d)
+        return self.output_linear(out)  
+
+
+class AttentionBlock(nn.Module):
+    """
+    Multi-head spatial self-attention with a residual connection.
+
+    The output projection is zero-initialised so the block starts as the
+    identity and the network initially behaves like the attention-free UNet.
+
+    Parameters
+    ----------
+    channels  : feature width (must be divisible by `groups`).
+    groups    : GroupNorm group count, already resolved by the caller.
+    num_heads : attention heads; falls back to 1 if `channels` is not divisible.
+    variant   : "cosine" or "normal" attention.
+    """
+
+    def __init__(self, channels: int, groups: int, num_heads: int = 4, variant: str = "cosine"):
+        super().__init__()
+        if channels % num_heads != 0:
+            num_heads = 1
+        self.num_heads = num_heads
+        self.norm = nn.GroupNorm(groups, channels)
+        self.qkv  = nn.Conv2d(channels, channels * 3, 1)
+        self.proj = nn.Conv2d(channels, channels, 1)
+        self.variant = variant
+
+        nn.init.zeros_(self.proj.weight)
+        nn.init.zeros_(self.proj.bias)
+        if self.variant == "cosine":
+            # Learnable per-head temperature, initialised to 10, clamped at 100.
+            self.logit_scale = nn.Parameter(torch.full((num_heads, 1, 1), math.log(10.0)))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        b, c, h, w = x.shape
+        qkv = self.qkv(self.norm(x)).reshape(b, 3, self.num_heads, c // self.num_heads, h * w)
+        q, k, v = (t.transpose(-1, -2).contiguous() for t in qkv.unbind(1))  # each (B, heads, HW, d)
+        
+        if self.variant == "cosine":
+            q = F.normalize(q, dim=-1)
+            k = F.normalize(k, dim=-1)
+            # Fold the per-head temperature into q, since SDPA's `scale` must be a float.
+            q = q * self.logit_scale.clamp(max=math.log(100.0)).exp()
+            scale = 1.0
+        else:
+            scale = None
+
+        if x.is_cuda:
+            with sdpa_kernel([SDPBackend.FLASH_ATTENTION, SDPBackend.EFFICIENT_ATTENTION]):
+                out = F.scaled_dot_product_attention(q, k, v, scale=scale)
+        else:
+            out = F.scaled_dot_product_attention(q, k, v, scale=scale)
+
+        out = out.transpose(-1, -2).reshape(b, c, h, w)                   # (B, C, H, W)
+        return x + self.proj(out)
+
+
 # ---------------------------------------------------------------------------
 # Core building block
 # ---------------------------------------------------------------------------
@@ -100,12 +207,14 @@ class ResBlock(nn.Module):
         out_channels: int,
         time_dim: int,
         groups: int = 8,
+        dropout: float = 0.0,
     ):
         super().__init__()
         self.norm1   = nn.GroupNorm(_valid_groups(in_channels,  groups), in_channels)
         self.conv1   = nn.Conv2d(in_channels, out_channels, 3, padding=1)
         self.time_proj = nn.Linear(time_dim, out_channels)
         self.norm2   = nn.GroupNorm(_valid_groups(out_channels, groups), out_channels)
+        self.dropout = nn.Dropout(dropout)
         self.conv2   = nn.Conv2d(out_channels, out_channels, 3, padding=1)
         self.act     = nn.SiLU()
         self.skip    = (
@@ -119,6 +228,7 @@ class ResBlock(nn.Module):
         # Additive time bias: (B, out_ch) -> (B, out_ch, 1, 1)
         h = h + self.time_proj(self.act(t_emb)).unsqueeze(-1).unsqueeze(-1)
         h = self.act(self.norm2(h))
+        h = self.dropout(h)
         h = self.conv2(h)
         return h + self.skip(x)
 
@@ -136,10 +246,10 @@ class DownBlock(nn.Module):
     pre-downsampled spatial detail.
     """
 
-    def __init__(self, in_channels: int, out_channels: int, time_dim: int):
+    def __init__(self, in_channels: int, out_channels: int, time_dim: int, dropout: float):
         super().__init__()
-        self.res1      = ResBlock(in_channels,  out_channels, time_dim)
-        self.res2      = ResBlock(out_channels, out_channels, time_dim)
+        self.res1      = ResBlock(in_channels,  out_channels, time_dim, dropout=dropout)
+        self.res2      = ResBlock(out_channels, out_channels, time_dim, dropout=dropout)
         self.downsample = nn.Conv2d(out_channels, out_channels, 4, stride=2, padding=1)
 
     def forward(
@@ -155,18 +265,19 @@ class DownBlock(nn.Module):
 class MidBlock(nn.Module):
     """Bottleneck: ResBlock → self-attention → ResBlock at the lowest resolution."""
 
-    def __init__(self, channels: int, time_dim: int):
+    def __init__(self, channels: int, time_dim: int, dropout: float, attention: bool, num_heads: int):
         super().__init__()
-        self.res1 = ResBlock(channels, channels, time_dim)
-        # GroupNorm groups resolved here with the same default (8) that every
-        # ResBlock uses — SuperResUNet's `groups` arg only reaches final_norm.
-        # Passed in rather than computed in attention.py to avoid a circular import.
-        # self.attn = AttentionBlock(channels, _valid_groups(channels))
-        self.res2 = ResBlock(channels, channels, time_dim)
+        self.attention: bool = attention
+        
+        self.res1 = ResBlock(channels, channels, time_dim, dropout=dropout)
+        if self.attention:
+            self.attn = AttentionBlock(channels, _valid_groups(channels), num_heads)
+        self.res2 = ResBlock(channels, channels, time_dim, dropout=dropout)
 
     def forward(self, x: torch.Tensor, t_emb: torch.Tensor) -> torch.Tensor:
         x = self.res1(x, t_emb)
-        # x = self.attn(x)
+        if self.attention:
+            x = self.attn(x)
         x = self.res2(x, t_emb)
         return x
 
@@ -183,12 +294,12 @@ class UpBlock(nn.Module):
     """
 
     def __init__(
-        self, in_channels: int, skip_channels: int, out_channels: int, time_dim: int
+        self, in_channels: int, skip_channels: int, out_channels: int, time_dim: int, dropout: float
     ):
         super().__init__()
         self.up   = nn.Upsample(scale_factor=2, mode="bilinear", align_corners=False)
-        self.res1 = ResBlock(in_channels + skip_channels, out_channels, time_dim)
-        self.res2 = ResBlock(out_channels, out_channels, time_dim)
+        self.res1 = ResBlock(in_channels + skip_channels, out_channels, time_dim, dropout=dropout)
+        self.res2 = ResBlock(out_channels, out_channels, time_dim, dropout=dropout)
 
     def forward(
         self, x: torch.Tensor, skip: torch.Tensor, t_emb: torch.Tensor
@@ -199,54 +310,18 @@ class UpBlock(nn.Module):
         x = self.res2(x, t_emb)
         return x
 
-class BottleneckAttention(nn.Module):
-    """
-    Generated by Claude Sonnet 4.6
-    Multi-head self-attention module for UNet bottleneck, following the standard
-    DDPM pattern of ResBlock -> Attention -> ResBlock at the lowest spatial resolution.
-    """
-    def __init__(self, channels: int, num_heads: int = 8):
-        super().__init__()
-        assert channels % num_heads == 0, "channels must be divisible by num_heads"
-
-        self.norm = nn.GroupNorm(8, channels)
-        self.attn = nn.MultiheadAttention(
-            embed_dim=channels,
-            num_heads=num_heads,
-            batch_first=True,
-        )
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        B, C, H, W = x.shape
-
-        # Normalize
-        h = self.norm(x)
-
-        # Flatten spatial dims to sequence: [B, H*W, C]
-        h = h.view(B, C, H * W).permute(0, 2, 1)
-
-        # Self-attention — query, key, value are all h
-        h, _ = self.attn(h, h, h)
-
-        # Reshape back to spatial: [B, C, H, W]
-        h = h.permute(0, 2, 1).view(B, C, H, W)
-
-        # Residual connection
-        return x + h
-
-
 # ---------------------------------------------------------------------------
 # Full model
 # ---------------------------------------------------------------------------
 
 class SuperResUNet(nn.Module):
     """
-    4-level UNet for conditional sea ice super-resolution.
+    N-level UNet for conditional super-resolution.
 
-    Conditioning is handled externally by stacking channels before calling
+    Conditioning is handled internally by channel concatenation
     forward.  A typical input stack might be::
 
-        x_in = torch.cat([x_t, lr_sic, land_mask, ice_mask], dim=1)
+        x_in = torch.cat([x_t, lr_gcm], dim=1)
         pred = model(x_in, t)
 
     Parameters
@@ -262,21 +337,29 @@ class SuperResUNet(nn.Module):
 
     def __init__(
         self,
-        in_channels: int = 3,
-        out_channels: int = 1,
-        base_dim: int = 32,
-        channel_mults: tuple[int, ...] = (1, 2, 3, 4),
-        time_dim: int = 256,
-        groups: int = 8,
+        hyperparameters: dict = {},
     ):
         super().__init__()
-        dims = [base_dim * m for m in channel_mults]   # e.g. [32, 64, 96, 128]
+
+        self.target_channels = hyperparameters.get("target_channels", 4)
+        self.condition_channels = hyperparameters.get("condition_channels", 20)
+        in_channels = self.target_channels + self.condition_channels
+
+        base_channels = hyperparameters.get("base_channels", 32)
+        channel_mults = hyperparameters.get("channel_mults", [1, 2, 3, 4])
+        time_dim = hyperparameters.get("time_dim", 256)
+        groups = hyperparameters.get("groups", 8)
+        dropout = hyperparameters.get("dropout", 0.0)
+        attention = hyperparameters.get("attention", False)
+        num_heads = hyperparameters.get("num_heads", 4)
+
+        dims = [base_channels * m for m in channel_mults]   # e.g. [32, 64, 96, 128]
         n_levels = len(dims) - 1                        # number of down/up pairs
 
         # Time embedding: sinusoidal positional encoding → 2-layer MLP
         self.time_embed = nn.Sequential(
-            SinusoidalEmbedding(base_dim),
-            nn.Linear(base_dim, time_dim),
+            SinusoidalEmbedding(base_channels),
+            nn.Linear(base_channels, time_dim),
             nn.SiLU(),
             nn.Linear(time_dim, time_dim),
         )
@@ -286,14 +369,15 @@ class SuperResUNet(nn.Module):
 
         # Encoder
         self.downs = nn.ModuleList([
-            DownBlock(dims[i], dims[i + 1], time_dim)
+            DownBlock(dims[i], dims[i + 1], time_dim, dropout)
             for i in range(n_levels)
         ])
 
         # Bottleneck
-        self.mid1 = MidBlock(dims[-1], time_dim)
-        self.mid_attn = BottleneckAttention(dims[-1], num_heads=8)
-        self.mid2 = MidBlock(dims[-1], time_dim)
+        self.mid = MidBlock(
+            dims[-1], time_dim, 
+            dropout, attention, num_heads
+        )
 
         # Decoder (reversed: deepest first)
         self.ups = nn.ModuleList([
@@ -302,19 +386,20 @@ class SuperResUNet(nn.Module):
                 skip_channels=dims[n_levels - i],
                 out_channels=dims[n_levels - i - 1],
                 time_dim=time_dim,
+                dropout=dropout
             )
             for i in range(n_levels)
         ])
 
         # Final projection to output residual
         self.final_norm = nn.GroupNorm(_valid_groups(dims[0], groups), dims[0])
-        self.final_conv = nn.Conv2d(dims[0], out_channels, 1)
+        self.final_conv = nn.Conv2d(dims[0], self.target_channels, 1)
 
     # ------------------------------------------------------------------
     # Forward
     # ------------------------------------------------------------------
 
-    def forward(self, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, cond: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
         """
         Parameters
         ----------
@@ -325,6 +410,7 @@ class SuperResUNet(nn.Module):
         -------
         (B, out_channels, H, W)  — predicted residual.
         """
+        x = torch.cat([x, cond], dim=1)  # (B, in_ch, H, W)
         t_emb = self.time_embed(t)      # (B, time_dim)
 
         x = self.init_conv(x)           # (B, C0, H, W)
@@ -334,9 +420,7 @@ class SuperResUNet(nn.Module):
             x, skip = down(x, t_emb)
             skips.append(skip)
 
-        x = self.mid1(x, t_emb)
-        x = self.mid_attn(x)
-        x = self.mid2(x, t_emb)
+        x = self.mid(x, t_emb)
 
         for up in self.ups:
             x = up(x, skips.pop(), t_emb)

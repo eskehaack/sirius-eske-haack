@@ -1,10 +1,10 @@
-from .backbone_unet import ConditionalUNet
+from .backbones.cond_unet import ConditionalUNet
 from .cond_unet import LitConditionalUNet
 from .ddpm import LitConditionalDDPM
 from .cold_diffusion import LitColdDiffusion
 from .custom_cold import LitCustomCold
 from .diffusers_ddpm import LitClimateDiffusion
-from .edm.lit_edm import LitEDM
+from .lit_edm import LitEDM
 
 __all__ = [
     "ConditionalUNet",

@@ -1,200 +1,49 @@
 from __future__ import annotations
 
-from typing import Optional, Sequence
-import math
+from typing import Optional
 
 import torch
 import torch.nn.functional as F
-import lightning.pytorch as pl
 
 import numpy as np
 
 from src.callbacks.timer import log_time
-from src.models.backbone_unet import ConditionalUNet
+
+from src.models.base_diffusion import LitConditionalDiffusion
 
 
-class LitConditionalDDPM(pl.LightningModule):
+class LitConditionalDDPM(LitConditionalDiffusion):
     def __init__(
         self,
-        target_channels: int = 1,
-        condition_channels: int = 1,
-        base_channels: int = 128,
-        channel_mults: Sequence[int] = (1, 2, 4, 8),
-        timesteps: int = 1000,
-        beta_start: float = 1e-4,
-        beta_end: float = 2e-2,
-        schedule: str = "linear",
-        dropout: float = 0.0,
-        lr: float = 2e-4,
-        image_size: int = 432,
-        attention: bool = False,
+        backbone: str = "cond_unet",
+        hyperparameters: dict = {},
     ):
-        super().__init__()
-        self.save_hyperparameters()
+        super().__init__(backbone, hyperparameters)
 
-        self.model = ConditionalUNet(
-            target_channels=target_channels,
-            condition_channels=condition_channels,
-            base_channels=base_channels,
-            channel_mults=channel_mults,
-            dropout=dropout,
-            attention=attention,
-        )
+        schedule = hyperparameters.get("schedule", "linear")
+        timesteps = hyperparameters.get("timesteps", 1000)
+        beta_start = hyperparameters.get("beta_start", 1e-4)
+        beta_end = hyperparameters.get("beta_end", 2e-2)
 
-        betas, alphas, alpha_bars = self.schedule(
+        self.schedule(
             schedule=schedule,
             timesteps=timesteps,
             beta_start=beta_start,
             beta_end=beta_end,
         )
-        alpha_bars_prev = torch.cat([torch.ones(1, dtype=torch.float32), alpha_bars[:-1]], dim=0)
-        sigmas = (1 - alpha_bars_prev) / (1 - alpha_bars) * betas
 
-        self.image_size = image_size
-        self.lr = lr
-
-        self.initial_target_shape = (412, 424)
-        self.pad_x = (self.image_size - self.initial_target_shape[0]) // 2
-        self.pad_y = (self.image_size - self.initial_target_shape[1]) // 2
-        self.pad_tuple = (self.pad_y, self.pad_y, self.pad_x, self.pad_x)
-
-        self.register_buffer("betas", betas)
-        self.register_buffer("alphas", alphas)
-        self.register_buffer("alpha_bars", alpha_bars)
-        self.register_buffer("sqrt_alpha_bars", torch.sqrt(alpha_bars))
-        self.register_buffer("sqrt_one_minus_alpha_bars", torch.sqrt(1.0 - alpha_bars))
-        self.register_buffer("sigmas", sigmas)
-
-        self.static = None  # Allocation
-    
-    def schedule(self, schedule: str, timesteps: int, beta_start: float, beta_end: float):
-        if schedule == "linear":
-            betas = torch.linspace(beta_start, beta_end, timesteps)
-        elif schedule == "cosine":
-            s = 0.008
-            t = torch.linspace(0, timesteps, timesteps + 1)
-            alphas_cumprod = torch.cos(((t / timesteps) + s) / (1 + s) * math.pi * 0.5) ** 2
-            alphas_cumprod = alphas_cumprod / alphas_cumprod[0]
-            betas = 1 - (alphas_cumprod[1:] / alphas_cumprod[:-1])
-            betas = torch.clamp(betas, min=0, max=0.999)
-            alphas = 1.0 - betas
-            alpha_bars = alphas_cumprod[1:]  # Use the analytic values directly!
-            return betas, alphas, alpha_bars
-        elif schedule == "exponential":
-                betas = torch.logspace(torch.log10(beta_start), torch.log10(beta_end), timesteps)
-        elif schedule == "laplace":
-            mu = 10.0
-            b = 10.0
-            t = torch.linspace(0, timesteps - 1, timesteps)
-            betas = (1 / (2 * b)) * torch.exp(-torch.abs(t / timesteps - mu) / b)
-            betas = torch.clamp(betas, min=0, max=0.999)
-        elif schedule == "quadratic":
-            t = torch.linspace(0, timesteps - 1, timesteps)
-            betas = beta_start + (beta_end - beta_start) * (t / (timesteps - 1)) ** 2
-        elif schedule == "sigmoid":
-            t = torch.linspace(0, timesteps - 1, timesteps)
-            betas = beta_start + (beta_end - beta_start) / (
-                1 + torch.exp(-12 * (t / (timesteps - 1) - 0.5))
-            )
-        elif schedule == "step":
-            betas = torch.full((timesteps,), beta_start)
-            step_size = timesteps // 10
-            for i in range(1, 10):
-                betas[i * step_size : (i + 1) * step_size] = beta_start + (
-                    (beta_end - beta_start) * i / 10
-                )
-        else:
-            raise ValueError(f"Unknown noise schedule: {schedule}")
-        
-        alphas = 1.0 - betas
-        alpha_bars = torch.cumprod(alphas, dim=0)
-        return betas, alphas, alpha_bars
-
-    def _crop(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Generated by Claude Opus 5.5. Prompt summary: user asked why a conditional DDPM
-        trains well but samples with high error; this helper fixes swapped crop axes.
-        pad_x pads H (dim 2) and pad_y pads W (dim 3), matching self.pad_tuple.
-        """
-        H, W = x.shape[-2], x.shape[-1]
-        return x[..., self.pad_x : H - self.pad_x, self.pad_y : W - self.pad_y]
-
-    def q_sample(
-        self, x0: torch.Tensor, t: torch.Tensor, noise: torch.Tensor
-    ) -> torch.Tensor:
-        sqrt_ab = self.sqrt_alpha_bars[t][:, None, None, None]
-        sqrt_omab = self.sqrt_one_minus_alpha_bars[t][:, None, None, None]
-        return sqrt_ab * x0 + sqrt_omab * noise
-
-    def _rev_qsample(self, x_t: torch.Tensor, t: torch.Tensor, noise_pred: torch.Tensor) -> torch.Tensor:
-        sqrt_ab = self.sqrt_alpha_bars[t][:, None, None, None]
-        sqrt_omab = self.sqrt_one_minus_alpha_bars[t][:, None, None, None]
-        return (x_t - sqrt_omab * noise_pred) / sqrt_ab
-
-    def _load_batch(self, batch):
-        x, y, static, _ = batch
-
-        x0 = torch.stack(
-            list(y.values()),
-            dim=1,
-        )
-
-        x0 = F.pad(
-            x0,
-            pad=self.pad_tuple,
-            mode="constant",
-            value=0.0,
-        )
-
-        # Interpolate the condition to match the target shape
-        condition = F.interpolate(
-            x,
-            size=self.initial_target_shape,
-            mode="bilinear",
-            align_corners=False,
-        )
-        # Then pad to meet model requirements
-        condition = F.pad(
-            condition,
-            pad=self.pad_tuple,
-            mode="constant",
-            value=0.0,
-        )
-
-        # Only interpolate static once and store it for future use
-        if self.static is None:
-            # Collapse the batch dimension to allow for broadcasting with other batch sizes
-            static = static[0] # Get rid of batch dimension
-            static = static.unsqueeze(0)  # Add batch dimension back
-
-            static = F.interpolate(
-                static,
-                size=self.initial_target_shape,
-                mode="bilinear",
-                align_corners=False,
-            )
-            self.static = F.pad(
-                static,
-                pad=self.pad_tuple,
-                mode="constant",
-                value=0.0,
-            )
-
-        static = self.static.expand(condition.size(0), -1, -1, -1)  # Expand to match batch size
-        condition = torch.cat([condition, static], dim=1)
-
-        return x0, condition
+        self.cfg_dropout = hyperparameters.get("cfg_dropout", 0.1)
 
     @log_time
     def training_step(self, batch, batch_idx):
         x0, condition = self._load_batch(batch)
 
         # CFG dropout — randomly null the condition
-        if torch.rand(1).item() < 0.1:  # 10% unconditional
+        if torch.rand(1).item() < self.cfg_dropout:
             condition = torch.zeros_like(condition)
 
         b = x0.shape[0]
-        t = torch.randint(0, self.hparams.timesteps, (b,), device=x0.device)
+        t = torch.randint(0, self.timesteps, (b,), device=x0.device)
         noise = torch.randn_like(x0)
 
         x_t = self.q_sample(x0, t, noise)
@@ -212,7 +61,7 @@ class LitConditionalDDPM(pl.LightningModule):
         x0, condition = self._load_batch(batch)
 
         b = x0.shape[0]
-        t = torch.randint(0, self.hparams.timesteps, (b,), device=x0.device)
+        t = torch.randint(0, self.timesteps, (b,), device=self.device)
         noise = torch.randn_like(x0)
 
         x_t = self.q_sample(x0, t, noise)
@@ -232,30 +81,31 @@ class LitConditionalDDPM(pl.LightningModule):
         self.log("val_recon_loss", recon_loss, prog_bar=True, on_epoch=True)
         return loss
 
+    @torch.inference_mode()
     def sample(
         self,
         condition: torch.Tensor,
         num_steps: int = 50,
-        shape: Optional[tuple[int, int, int, int]] = None,
-        sample_type = "ddpm",
         hparams: dict = {},
     ) -> torch.Tensor:
+        self.eval()
+        sample_type = hparams.get("sample_type", "ddpm")
         if sample_type == "ddpm":
             cfg_scale = hparams.get("cfg_scale", 1.0)
-            return self.sample_ddpm(condition, num_steps=num_steps, shape=shape, cfg_scale=cfg_scale)
+            save_metrics = hparams.get("save_metrics", False)
+            return self.sample_ddpm(condition, num_steps=num_steps, cfg_scale=cfg_scale, save_metrics=save_metrics)
         elif sample_type == "ddim":
             eta = hparams.get("eta", 0.0)
-            return self.sample_ddim(condition, num_steps=num_steps, eta=eta, shape=shape)
+            return self.sample_ddim(condition, num_steps=num_steps, eta=eta)
         else:
             raise ValueError(f"Unknown sample_type: {sample_type}. Must be 'ddpm' or 'ddim'.")
-
-    @torch.no_grad()
+        
     def sample_ddpm(
         self,
         condition: torch.Tensor,
         num_steps: Optional[int] = None,
         cfg_scale: float = 1.0,
-        shape: Optional[tuple[int, int, int, int]] = None,
+        save_metrics: bool = False
     ) -> torch.Tensor:
         """
         Samples target images conditioned on `condition`.
@@ -273,24 +123,19 @@ class LitConditionalDDPM(pl.LightningModule):
 
         device = condition.device
         b, _, h, w = condition.shape
-
-        if shape is None:
-            shape = (b, self.hparams.target_channels, h, w)
-
+        shape = (b, self.target_channels, h, w)
         x = torch.randn(shape, device=device)
 
-        steps = self.hparams.timesteps if num_steps is None else num_steps
+        steps = self.timesteps if num_steps is None else num_steps
         step_indices = torch.linspace(
-            self.hparams.timesteps - 1, 0, steps, device=device
+            self.timesteps - 1, 0, steps, device=device
         ).long()
-
-        step_indices = step_indices[20:] # Cut off the first 20 steps to avoid the initial high variance
 
         # Null condition for CFG
         null_condition = torch.zeros_like(condition)
 
-        means = np.zeros((steps, b, self.hparams.target_channels))
-        stds = np.zeros((steps, b, self.hparams.target_channels))
+        means = np.zeros((steps, b, self.target_channels))
+        stds = np.zeros((steps, b, self.target_channels))
 
         for i, t_idx in enumerate(step_indices):
             t = torch.full((b,), t_idx.item(), device=device, dtype=torch.long)
@@ -315,7 +160,7 @@ class LitConditionalDDPM(pl.LightningModule):
                 x - (beta_t / torch.sqrt(1.0 - alpha_bar_t)) * noise_pred
             )
 
-            mean_no_pad = mean[:, :, self.pad_y:-self.pad_y, self.pad_x:-self.pad_x]
+            mean_no_pad = self._crop(mean)
             means[i] = mean_no_pad.mean(dim=[2, 3]).detach().cpu().numpy()
             stds[i] = mean_no_pad.std(dim=[2, 3]).detach().cpu().numpy()
 
@@ -326,18 +171,17 @@ class LitConditionalDDPM(pl.LightningModule):
             else:
                 x = mean
 
-        np.save("dist_test/means_black.npy", means)
-        np.save("dist_test/stds_black.npy", stds)
+        if save_metrics:
+            np.save("dist_test/means_black.npy", means)
+            np.save("dist_test/stds_black.npy", stds)
 
         return x
 
-    @torch.no_grad()
     def sample_ddim(
         self,
         condition: torch.Tensor,
         num_steps: int = 50,
         eta: float = 0.0,
-        shape: Optional[tuple[int, int, int, int]] = None,
     ) -> torch.Tensor:
         """
         Function generated by Claude Sonnet 4.6
@@ -364,19 +208,16 @@ class LitConditionalDDPM(pl.LightningModule):
             eta:        stochasticity coefficient in [0, 1].
                         eta=0  -> fully deterministic (no noise injected).
                         eta=1  -> recovers DDPM-equivalent variance.
-            shape:      optional explicit output shape [B, C, H, W].
-    
+
         Returns:
             Sampled tensor of shape `shape` (or inferred from condition).
         """
         self.eval()
-        device = condition.device
+        device = self.device
         b, _, h, w = condition.shape
+        shape = (b, self.target_channels, h, w)
     
-        if shape is None:
-            shape = (b, self.hparams.target_channels, h, w)
-    
-        T = self.hparams.timesteps
+        T = self.timesteps
     
         # Build a subsequence of timesteps, evenly spaced from T-1 down to 0.
         # These are the "tau" indices in the DDIM paper.
@@ -427,11 +268,3 @@ class LitConditionalDDPM(pl.LightningModule):
                 x = x0_pred
     
         return x
-
-    def configure_optimizers(self):
-        # Optimizer and scheduler
-        optimizer = torch.optim.AdamW(self.parameters(), lr=self.hparams.lr)
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-            optimizer, T_max=self.hparams.max_epochs, eta_min=self.lr * 0.01
-        )
-        return [optimizer], [{"scheduler": scheduler, "interval": "step"}]

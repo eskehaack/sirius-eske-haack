@@ -8,17 +8,15 @@ Algorithm 2 from Bansal et al. (2022) as the sampler.
 from __future__ import annotations
 
 import math
-from typing import Optional, Sequence
 
 import torch
 import torch.nn.functional as F
-import lightning.pytorch as pl
 
 from src.callbacks.timer import log_time
-from src.models.backbone_unet import ConditionalUNet
 
+from src.models.base_diffusion import LitConditionalDiffusion
 
-class LitColdDiffusion(pl.LightningModule):
+class LitColdDiffusion(LitConditionalDiffusion):
     """
     Cold Diffusion model for climate downscaling, following:
         Bansal et al. "Cold Diffusion: Inverting Arbitrary Image Transforms
@@ -46,47 +44,19 @@ class LitColdDiffusion(pl.LightningModule):
 
     def __init__(
         self,
-        target_channels: int = 1,
-        condition_channels: int = 1,
-        base_channels: int = 128,
-        channel_mults: Sequence[int] = (1, 2, 4, 8),
-        timesteps: int = 1000,
-        beta_start: float = 1e-4,
-        beta_end: float = 2e-2,
-        schedule: str = "cosine",
-        dropout: float = 0.0,
-        lr: float = 2e-4,
-        image_size: int = 432,
-        attention: bool = False,
-    ):
-        super().__init__()
-        self.save_hyperparameters()
+        backbone: str = "cond_unet",
+        hyperparameters: dict = {},
+    ) -> None:
+        super().__init__(backbone, hyperparameters)
 
-        # The UNet predicts r0 (the HR-LR residual), not noise.
-        # Input to the UNet is x_t (degraded HR) concatenated with condition
-        # (upsampled LR + static), matching the existing ConditionalUNet interface.
-        self.model = ConditionalUNet(
-            target_channels=target_channels,
-            condition_channels=condition_channels,
-            base_channels=base_channels,
-            channel_mults=channel_mults,
-            dropout=dropout,
-            attention=attention,
-        )
+        schedule = hyperparameters.get("schedule", "linear")
+        timesteps = hyperparameters.get("timesteps", 1000)
+        beta_start = hyperparameters.get("beta_start", 1e-4)
+        beta_end = hyperparameters.get("beta_end", 2e-2)
 
         alpha_bars = self._make_alpha_bars(schedule, timesteps, beta_start, beta_end)
 
-        self.image_size = image_size
-        self.lr = lr
-
-        self.initial_target_shape = (412, 424)
-        self.pad_x = (self.image_size - self.initial_target_shape[0]) // 2
-        self.pad_y = (self.image_size - self.initial_target_shape[1]) // 2
-        self.pad_tuple = (self.pad_y, self.pad_y, self.pad_x, self.pad_x)
-
         self.register_buffer("alpha_bars", alpha_bars)   # [T]  ᾱ_t, descending 1→0
-
-        self.static = None  # Lazy allocation, same pattern as existing classes
 
     # ------------------------------------------------------------------
     # Schedule
@@ -165,56 +135,16 @@ class LitColdDiffusion(pl.LightningModule):
         return ab * r0
 
     # ------------------------------------------------------------------
-    # Batch loading  (identical to existing classes)
-    # ------------------------------------------------------------------
-
-    def _load_batch(self, batch):
-        x, y, static, _ = batch
-
-        x0_hr = torch.stack(list(y.values()), dim=1)
-        x0_hr = F.pad(x0_hr, pad=self.pad_tuple, mode="constant", value=0.0)
-
-        condition = F.interpolate(
-            x,
-            size=self.initial_target_shape,
-            mode="bilinear",
-            align_corners=False,
-        )
-        condition = F.pad(condition, pad=self.pad_tuple, mode="constant", value=0.0)
-
-        if self.static is None:
-            static = static[0].unsqueeze(0)
-            static = F.interpolate(
-                static,
-                size=self.initial_target_shape,
-                mode="bilinear",
-                align_corners=False,
-            )
-            self.static = F.pad(static, pad=self.pad_tuple, mode="constant", value=0.0)
-
-        static = self.static.expand(condition.size(0), -1, -1, -1)
-        condition = torch.cat([condition, static], dim=1)
-
-        # r0 is already the HR-LR residual — computed during preprocessing.
-        # We still need x_lr as the starting point for the sampler (x_T = x_LR),
-        # extracted from the condition tensor (dynamic LR channels only, no static).
-        n_lr = x0_hr.shape[1]               # same channel count as HR target
-        x_lr = condition[:, :n_lr]          # [B, target_channels, H, W]
-
-        r0 = x0_hr                          # already the residual from preprocessing
-
-        return r0, x_lr, condition
-
-    # ------------------------------------------------------------------
     # Training & validation
     # ------------------------------------------------------------------
 
     @log_time
     def training_step(self, batch, batch_idx):
-        r0, x_lr, condition = self._load_batch(batch)
+        r0, condition = self._load_batch(batch)
+        x_lr = condition[:, :self.target_channels]
 
         b = r0.shape[0]
-        t = torch.randint(0, self.hparams.timesteps, (b,), device=r0.device)
+        t = torch.randint(0, self.timesteps, (b,), device=self.device)
 
         # Forward process: degrade the residual
         r_t = self.degrade(r0, t)
@@ -231,10 +161,11 @@ class LitColdDiffusion(pl.LightningModule):
         return loss
 
     def validation_step(self, batch, batch_idx):
-        r0, x_lr, condition = self._load_batch(batch)
+        r0, condition = self._load_batch(batch)
+        x_lr = condition[:, :self.target_channels]
 
         b = r0.shape[0]
-        t = torch.randint(0, self.hparams.timesteps, (b,), device=r0.device)
+        t = torch.randint(0, self.timesteps, (b,), device=self.device)
 
         r_t = self.degrade(r0, t)
         x_t = x_lr + r_t
@@ -250,14 +181,12 @@ class LitColdDiffusion(pl.LightningModule):
     # Sampling  (Algorithm 2 from Bansal et al. 2022)
     # ------------------------------------------------------------------
 
-    @torch.no_grad()
+    @torch.inference_mode()
     def sample(
         self,
         condition: torch.Tensor,
         num_steps: int = 200,
-        shape: Optional[tuple[int, int, int, int]] = None,
-        sample_type = "ddpm", # <-- compatibility
-        eta: float = 0.0,        # <-- compatibility
+        hparams: dict = {},
     ) -> torch.Tensor:
         """
         Cold Diffusion sampler (Algorithm 2, Bansal et al. 2022).
@@ -283,21 +212,18 @@ class LitColdDiffusion(pl.LightningModule):
                         used as the starting point and residual anchor
             num_steps:  number of reverse steps (can be << training timesteps;
                         100-200 is usually sufficient)
-            shape:      optional explicit output shape [B, C, H, W]
+            hparams:    dictionary of additional hyperparameters (currently unused)
 
         Returns:
             x0_hr: [B, target_channels, H, W]  downscaled HR prediction
         """
         self.eval()
 
-        x_lr = condition[:, :self.hparams.target_channels]  # extract LR channels
-        device = condition.device
+        x_lr = condition[:, :self.target_channels]  # extract LR channels
+        device = self.device
         b = condition.shape[0]
 
-        if shape is None:
-            shape = x_lr.shape
-
-        T = self.hparams.timesteps
+        T = self.timesteps
 
         # Evenly-spaced timestep subsequence T-1 ... 0  (same subsampling as DDIM)
         step_indices = torch.linspace(T - 1, 0, num_steps, device=device).long()
@@ -323,14 +249,3 @@ class LitColdDiffusion(pl.LightningModule):
             x = x + delta_ab * r_hat
 
         return x
-
-    # ------------------------------------------------------------------
-    # Optimiser  (identical to existing classes)
-    # ------------------------------------------------------------------
-
-    def configure_optimizers(self):
-        optimizer = torch.optim.AdamW(self.parameters(), lr=self.hparams.lr)
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-            optimizer, T_max=self.hparams.max_epochs, eta_min=self.lr * 0.5
-        )
-        return [optimizer], [{"scheduler": scheduler, "interval": "step"}]
