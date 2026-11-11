@@ -6,7 +6,7 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=7
 #SBATCH --gpus-per-task=1
-#SBATCH --mem=128G
+#SBATCH --mem=64G
 #SBATCH --time=06:00:00
 #SBATCH --output=./hpc_outputs/train/%x-%j.out
 #SBATCH --error=./hpc_outputs/train/%x-%j.err
@@ -50,20 +50,22 @@ amd-smi version
 
 cd "/scratch/project_465002687/sirius/"
 SIF="/scratch/project_465002687/ec_earth/containers/dockerv5.sif"
-CONFIG_PATH="./src/configs/larger_config.toml"
+CONFIG_PATH="./src/configs/sample_config.toml"
 
 srun --account=project_465002687 singularity exec \
     --bind /scratch/project_465002687 \
     "$SIF" \
-    python -m src.train \
+    python -m src.train_v2 \
         --config_path "$CONFIG_PATH" \
         --run_id "$SLURM_JOB_ID"
 
 srun --account=project_465002687 singularity exec \
     --bind /scratch/project_465002687 \
     "$SIF" \
-    python -m src.sample \
+    python -m src.sample_v2 \
         --config_path "$CONFIG_PATH" \
         --run_id "$SLURM_JOB_ID" \
-        --timesteps 500 \
-        --date "1970-03-01"
+        --ensemble_size 5 \
+        --timesteps 1000 \
+        --sample_type "ddpm" \
+        --num_workers 2
