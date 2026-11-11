@@ -76,8 +76,6 @@ class LitConditionalDiffusion(LightningModule):
         if self.static is None:
             static_single = static[:1].to(device, dtype)  # [1, 2, 412, 424]
             self.static = F.pad(static_single, pad=self.pad_tuple, mode="constant", value=0.0)
-        elif self.static.device != device:
-            self.static = self.static.to(device)
 
         static_b = self.static.expand(condition.size(0), -1, -1, -1)  # [B, 2, *training_image_size]
         condition = torch.cat([condition, static_b], dim=1)           # [B, 20, *training_image_size]

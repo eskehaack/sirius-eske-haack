@@ -206,7 +206,6 @@ class LitEDM(LitConditionalDiffusion):
         self.precond.eval()
 
         device = self.device
-        cond = cond.to(device)
         B, _, H, W = cond.shape
 
         save_metrics: bool = hparams.get("save_metrics", False)
