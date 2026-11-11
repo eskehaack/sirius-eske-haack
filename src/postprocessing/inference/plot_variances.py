@@ -2,10 +2,10 @@ import xarray as xr
 import numpy as np
 import matplotlib.pyplot as plt
 
-means = np.load("dist_test/edm_means.npy")
-stds = np.load("dist_test/edm_stds.npy")
+means = np.load("dist_test/means_black.npy")
+stds = np.load("dist_test/stds_black.npy")
 
-target = xr.open_dataset("/scratch/project_465002687/ec_earth/sample/targets.zarr").sel(time="1966-11-30").to_array().values[0]
+target = xr.open_dataset("/scratch/project_465002687/ec_earth/sample/targets.zarr").sel(time="1956-01-01").to_array().values[0]
 # target = np.zeros((4,412,424))
 
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(6.4,  4), layout="constrained")
@@ -35,4 +35,4 @@ ax2.set_ylabel("Value")
 ax2.set_yscale("log")
 ax1.xaxis.set_inverted(True)
 ax2.xaxis.set_inverted(True)
-plt.savefig("dist_test/variances_plot_edm.png", dpi=300)
+plt.savefig("dist_test/variances_plot_superddpm.png", dpi=300)
