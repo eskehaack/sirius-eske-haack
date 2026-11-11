@@ -43,6 +43,7 @@ echo "MIOPEN_CUSTOM_CACHE_DIR=$MIOPEN_CUSTOM_CACHE_DIR"
 # --------------------------------------------------
 
 amd-smi version
+srun rocm-smi
 
 # --------------------------------------------------
 # Run
