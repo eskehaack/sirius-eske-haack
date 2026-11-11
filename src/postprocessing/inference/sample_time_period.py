@@ -23,7 +23,7 @@ from src.data_builders.dataloader import DataModule
 from src.data_builders.smhi_dataloader import parse_config
 
 # Shared helpers from the per-batch sampler (keep both files in the same folder)
-from src.sample_v2 import load_checkpoint, move_batch_like_trainer, load_stats, unnormalize
+from src.sample import load_checkpoint, move_batch_like_trainer, load_stats, unnormalize
 
 
 # ----------------------------------------------------

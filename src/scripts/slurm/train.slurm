@@ -55,14 +55,14 @@ CONFIG_PATH="./src/configs/sample_config.toml"
 srun --account=project_465002687 singularity exec \
     --bind /scratch/project_465002687 \
     "$SIF" \
-    python -m src.train_v2 \
+    python -m src.train \
         --config_path "$CONFIG_PATH" \
         --run_id "$SLURM_JOB_ID"
 
 srun --account=project_465002687 singularity exec \
     --bind /scratch/project_465002687 \
     "$SIF" \
-    python -m src.sample_v2 \
+    python -m src.sample \
         --config_path "$CONFIG_PATH" \
         --run_id "$SLURM_JOB_ID" \
         --ensemble_size 5 \

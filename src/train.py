@@ -17,23 +17,23 @@ def train_ddpm(run_id: str, config_path: str = "./src/configs/training_config.to
 
     pl.seed_everything(42, workers=True)
 
+    config_path = Path(config_path)
+    if not config_path.exists():
+        raise FileNotFoundError(f"Config file not found: {config_path}")
+    
     config: dict = parse_config("training", config_path)
 
     batch_size = int(config["batch_size"])
     max_epochs = int(config["max_epochs"])
-    lr = float(config["lr"])
-    base_channels = int(config["base_channels"])
     num_workers = int(config["num_workers"])
-    target_channels = int(config["target_channels"])
-    condition_channels = int(config["condition_channels"])
     checkpoint_dir = Path(config["checkpoint_dir"]) / str(run_id)
-    timesteps = int(config["timesteps"])
-    schedule = str(config["schedule"])
-    channel_mults = tuple(config["channel_mults"])
     checkpoint_every_n_steps = None if int(config["checkpoint_every_n_steps"]) == 0 else int(config["checkpoint_every_n_steps"])
     log_every_n_step = int(config["log_every_n_step"])
-    attention = bool(config["attention"])
-    model = str(config["model"])
+
+    hyperparameters: dict = parse_config("hyperparams", config_path)
+    if "max_epochs" in hyperparameters and hyperparameters["max_epochs"] != max_epochs:
+        print(f"Warning: Overriding max_epochs in hyperparameters ({hyperparameters['max_epochs']}) with value from config ({max_epochs}).")
+    hyperparameters["max_epochs"] = max_epochs
 
     datamodule = DataModule(
         batch_size=batch_size,
@@ -41,15 +41,9 @@ def train_ddpm(run_id: str, config_path: str = "./src/configs/training_config.to
         config_path=config_path,
     )
 
-    model = MODELREGISTRY[model](
-        target_channels=target_channels,
-        condition_channels=condition_channels,
-        base_channels=base_channels,
-        channel_mults=channel_mults,
-        timesteps=timesteps,
-        schedule=schedule,
-        lr=lr,
-        attention=attention
+    model = MODELREGISTRY[hyperparameters["diffusion_model"]](
+        backbone=hyperparameters["backbone"],
+        hyperparameters=hyperparameters
     )
 
     model.save_hyperparameters(config)

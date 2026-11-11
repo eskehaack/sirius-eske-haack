@@ -54,7 +54,7 @@ SIF="/scratch/project_465002687/ec_earth/containers/dockerv5.sif"
 srun --account=project_465002687 singularity exec \
     --bind /scratch/project_465002687 \
     "$SIF" \
-    python -m src.sample_v2 \
+    python -m src.sample \
         --run_id "23522809" \
         --checkpoint "last" \
         --batch_index 0 \
