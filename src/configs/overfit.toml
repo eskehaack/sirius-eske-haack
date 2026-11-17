@@ -1,19 +1,24 @@
 [training]
-batch_size = 16
-max_epochs = 1500
-lr = 1e-4
-base_channels = 64
-num_workers = 4
-target_channels = 4
-condition_channels = 20
+batch_size = 8
+max_epochs = 1000
+num_workers = 6
 checkpoint_dir = "./checkpoints/"
-timesteps = 1000
-schedule = "cosine"
-channel_mults = [1, 2, 4, 8]
 checkpoint_every_n_steps = 0
 log_every_n_step = 10
-attention = true
-model = "diffusers_ddpm"
+
+[hyperparams]
+lr = 1e-4
+backbone = "super_unet"
+target_channels = 4
+condition_channels = 20
+base_channels = 32
+channel_mults = [1, 2, 3, 4]
+attention = false
+num_heads = 4
+diffusion_model = "edm"
+schedule = "cosine"
+timesteps = 1000
+image_size = [432, 432]
 
 [dates]
 train_blocks = [

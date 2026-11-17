@@ -56,7 +56,7 @@ srun --account=project_465002687 singularity exec \
     --bind /scratch/project_465002687 \
     "$SIF" \
     python -m src.sample \
-        --run_id "23522809" \
+        --run_id "23641556" \
         --checkpoint "last" \
         --batch_index 0 \
         --ensemble_size 5 \
@@ -64,5 +64,5 @@ srun --account=project_465002687 singularity exec \
         --sample_type "ddpm" \
         --config_path ./src/configs/sample_config.toml \
         --num_workers 2 \
-        --cfg_scale 1.7 \
-	    --s_churn 1.0
+        --cfg_scale 1.0 \
+	--s_churn 0.0
