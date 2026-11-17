@@ -40,7 +40,6 @@ class DataModule(pl.LightningDataModule):
             targets_path=data_path_config["targets_output"],
             static_features_path=data_path_config["static_output"],
             blocks=date_config.get("train_blocks"),
-            chunk_size=487,
             shuffle=True
         )
         print(f"Training dataset size: {len(self.train_ds)} samples")
@@ -50,7 +49,6 @@ class DataModule(pl.LightningDataModule):
             targets_path=data_path_config["targets_output"],
             static_features_path=data_path_config["static_output"],
             blocks=date_config.get("val_blocks"),
-            chunk_size=487,
             shuffle=False
         )
         print(f"Validation dataset size: {len(self.val_ds)} samples")
@@ -59,7 +57,6 @@ class DataModule(pl.LightningDataModule):
         return DataLoader(
             self.train_ds,
             batch_size=self.batch_size,
-#            shuffle=True,
             num_workers=self.num_workers,
             prefetch_factor=2,
             pin_memory=True,
@@ -69,7 +66,6 @@ class DataModule(pl.LightningDataModule):
         return DataLoader(
             self.val_ds,
             batch_size=self.batch_size,
-#            shuffle=False,
             num_workers=self.num_workers,
             prefetch_factor=2,
             pin_memory=True,
