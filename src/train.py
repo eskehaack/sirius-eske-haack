@@ -60,6 +60,7 @@ def train_ddpm(run_id: str, config_path: str = "./src/configs/training_config.to
     )
 
     trainer = pl.Trainer(
+        profiler="simple",
         max_epochs=max_epochs,
         accelerator="auto",
         devices="auto",
@@ -68,7 +69,7 @@ def train_ddpm(run_id: str, config_path: str = "./src/configs/training_config.to
         callbacks=[
             checkpoint_callback,
             LearningRateMonitor(logging_interval="step"),
-            AMDGPUMonitor(interval=1.0, device_index=0),
+            # AMDGPUMonitor(interval=1.0, device_index=0),
             EarlyStopping(monitor="val_loss", mode="min", min_delta=0.0, patience=8)
         ],
         logger=TensorBoardLogger(save_dir="logs", name=str(run_id)),
@@ -76,8 +77,8 @@ def train_ddpm(run_id: str, config_path: str = "./src/configs/training_config.to
         val_check_interval=checkpoint_every_n_steps,
     )
 
+    print(f"Training on {torch.cuda.device_count()} devices.")
     trainer.fit(model, datamodule=datamodule)
-
     return model, trainer
 
 
