@@ -10,6 +10,7 @@ from pathlib import Path
 
 import torch
 import torch.nn as nn
+from torch.profiler import profile, record_function, ProfilerActivity
 import numpy as np
 
 from src.callbacks.timer import log_time
@@ -122,6 +123,8 @@ class LitEDM(LitConditionalDiffusion):
         self.precond = EDMPrecond(self.model, sigma_data=self.sigma_data)
         self.loss_fn = EDMLoss(P_mean=self.p_mean, P_std=self.p_std, sigma_data=self.sigma_data)
 
+        self.prof = None
+
     def _batch_loss(self, batch) -> torch.Tensor:
         residual, cond = batch
         return self.loss_fn(self.precond, x0=residual, cond=cond)
@@ -136,22 +139,33 @@ class LitEDM(LitConditionalDiffusion):
 
     @log_time
     def training_step(self, batch, batch_idx):
-        x0, condition = self._load_batch(batch)
+        if self.trainer.current_epoch == 1 and batch_idx == 0:
+            self.prof = profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA], acc_events=True, record_shapes=True)
+            self.prof.start()
+
+        with torch.profiler.record_function("dataloader"):
+            x0, condition = self._load_batch(batch)
 
         # CFG dropout — randomly null the condition
         if torch.rand(1).item() < self.cfg_dropout:
             condition = torch.zeros_like(condition)
 
-        loss = self._batch_loss((x0, condition))
+        with torch.profiler.record_function("forward"):
+            loss = self._batch_loss((x0, condition))
 
-        self.log("train_loss", loss, prog_bar=True, on_step=True, on_epoch=True)
+        # Stop profiler on last batch of first epoch and export trace to ./profiles/trace.json
+        if self.prof and self.trainer.current_epoch == 1 and batch_idx == len(self.trainer.train_dataloader) - 1:
+            self.prof.stop()
+            self.prof.export_chrome_trace("./profiles/trace.json")
+
+        self.log("train_loss", loss.item(), prog_bar=False, on_step=True, on_epoch=True)
         return loss
 
     def validation_step(self, batch, batch_idx):
         x0, condition = self._load_batch(batch)
         loss = self._batch_loss((x0, condition))
 
-        self.log("val_loss", loss, prog_bar=True, on_epoch=True)
+        self.log("val_loss", loss, prog_bar=False, on_epoch=True)
         return loss
 
     def cfg_forward(self, x_t: torch.Tensor, sigma: torch.Tensor, cond: torch.Tensor, cfg_scale: float) -> torch.Tensor:
