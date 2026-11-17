@@ -7,7 +7,7 @@ import lightning.pytorch as pl
 
 from torch.utils.data import DataLoader
 
-from src.data_builders.smhi_dataloader import TrainingDataset, ClimateDataBuilder, parse_config
+from src.data_builders.smhi_dataloader import TrainingDataset, ClimateDataBuilder, ChunkedZarrDataset, parse_config
 
 
 class DataModule(pl.LightningDataModule):
@@ -35,19 +35,23 @@ class DataModule(pl.LightningDataModule):
 
         data_path_config = parse_config(config_path=self.config_path, config_keyword="preprocessing")
 
-        self.train_ds = TrainingDataset(
+        self.train_ds = ChunkedZarrDataset(
             predictors_path=data_path_config["predictors_output"],
             targets_path=data_path_config["targets_output"],
             static_features_path=data_path_config["static_output"],
             blocks=date_config.get("train_blocks"),
+            chunk_size=487,
+            shuffle=True
         )
         print(f"Training dataset size: {len(self.train_ds)} samples")
 
-        self.val_ds = TrainingDataset(
+        self.val_ds = ChunkedZarrDataset(
             predictors_path=data_path_config["predictors_output"],
             targets_path=data_path_config["targets_output"],
             static_features_path=data_path_config["static_output"],
             blocks=date_config.get("val_blocks"),
+            chunk_size=487,
+            shuffle=False
         )
         print(f"Validation dataset size: {len(self.val_ds)} samples")
 
@@ -55,8 +59,9 @@ class DataModule(pl.LightningDataModule):
         return DataLoader(
             self.train_ds,
             batch_size=self.batch_size,
-            shuffle=True,
+#            shuffle=True,
             num_workers=self.num_workers,
+            prefetch_factor=2,
             pin_memory=True,
         )
 
@@ -64,7 +69,8 @@ class DataModule(pl.LightningDataModule):
         return DataLoader(
             self.val_ds,
             batch_size=self.batch_size,
-            shuffle=False,
+#            shuffle=False,
             num_workers=self.num_workers,
+            prefetch_factor=2,
             pin_memory=True,
         )

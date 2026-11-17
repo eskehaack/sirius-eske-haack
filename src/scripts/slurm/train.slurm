@@ -2,16 +2,20 @@
 #SBATCH --job-name=ec_earth_train
 #SBATCH --account=project_465002687
 #SBATCH --partition=small-g
-#SBATCH --nodes=1
-#SBATCH --ntasks-per-node=1
+#SBATCH --nodes=1-1
+#SBATCH --ntasks=1
 #SBATCH --cpus-per-task=7
-#SBATCH --gpus-per-task=1
+#SBATCH --gpus-per-node=1
 #SBATCH --mem=64G
-#SBATCH --time=06:00:00
+#SBATCH --time=01:00:00
 #SBATCH --output=./hpc_outputs/train/%x-%j.out
 #SBATCH --error=./hpc_outputs/train/%x-%j.err
 
 set -euo pipefail
+
+module load PrgEnv-cray
+module load craype-accel-amd-gfx90a
+module load rocm
 
 # --------------------------------------------------
 # Job-local cache directory setup
@@ -52,6 +56,16 @@ srun rocm-smi
 cd "/scratch/project_465002687/sirius/"
 SIF="/scratch/project_465002687/ec_earth/containers/dockerv5.sif"
 CONFIG_PATH="./src/configs/sample_config.toml"
+ROCPROF_PATH="/opt/rocm/bin/rocprofv3"
+
+# srun --account=project_465002687 singularity exec \
+#     --bind /scratch/project_465002687 \
+#     --overlay /project/project_465003358/Exercises/AMD/Pytorch/deps.sqsh \
+#     "$SIF" \
+#     rocprofv3 --kernel-trace --memory-copy-trace --hip-trace --output-format pftrace -- \
+#     python -m src.train \
+#         --config_path "$CONFIG_PATH" \
+#         --run_id "$SLURM_JOB_ID"
 
 srun --account=project_465002687 singularity exec \
     --bind /scratch/project_465002687 \
@@ -60,13 +74,13 @@ srun --account=project_465002687 singularity exec \
         --config_path "$CONFIG_PATH" \
         --run_id "$SLURM_JOB_ID"
 
-srun --account=project_465002687 singularity exec \
-    --bind /scratch/project_465002687 \
-    "$SIF" \
-    python -m src.sample \
-        --config_path "$CONFIG_PATH" \
-        --run_id "$SLURM_JOB_ID" \
-        --ensemble_size 5 \
-        --timesteps 1000 \
-        --sample_type "ddpm" \
-        --num_workers 2
+# srun --account=project_465002687 singularity exec \
+#     --bind /scratch/project_465002687 \
+#     "$SIF" \
+#     python -m src.sample \
+#         --config_path "$CONFIG_PATH" \
+#         --run_id "$SLURM_JOB_ID" \
+#         --ensemble_size 5 \
+#         --timesteps 1000 \
+#         --sample_type "ddpm" \
+#         --num_workers 2

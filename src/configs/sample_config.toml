@@ -1,6 +1,6 @@
 [training]
 batch_size = 8
-max_epochs = 40
+max_epochs = 2
 num_workers = 6
 checkpoint_dir = "./checkpoints/"
 checkpoint_every_n_steps = 0
@@ -33,17 +33,17 @@ val_blocks = [
 daily_frequency = true
 
 [preprocessing]
-timesteps_per_chunk = 8
+timesteps_per_chunk = 512
 temperature_constraints = false
 precipitation_scaling = 86400
 precipitation_transform = false
 residualize_targets = true
 wet_day_threshold = 0.5
 normalization = 'global'
-normalization_stats_path = '/scratch/project_465002687/ec_earth/sample/normalization_stats.nc'
-predictors_output = '/scratch/project_465002687/ec_earth/sample/predictors.zarr'
-targets_output = '/scratch/project_465002687/ec_earth/sample/targets.zarr'
-static_output = '/scratch/project_465002687/ec_earth/sample/static.zarr'
+normalization_stats_path = '/scratch/project_465002687/ec_earth/sample_big/normalization_stats.nc'
+predictors_output = '/scratch/project_465002687/ec_earth/sample_big/predictors.zarr'
+targets_output = '/scratch/project_465002687/ec_earth/sample_big/targets.zarr'
+static_output = '/scratch/project_465002687/ec_earth/sample_big/static.zarr'
 
 [predictors]
 vertical_dim_name = "plev"
