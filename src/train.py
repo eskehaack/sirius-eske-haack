@@ -10,7 +10,6 @@ from lightning.pytorch.loggers import TensorBoardLogger
 from src.data_builders.dataloader import DataModule
 from src.data_builders.smhi_dataloader import parse_config
 from src.models import MODELREGISTRY
-from src.callbacks.device_logger import AMDGPUMonitor
 
 
 def train_ddpm(run_id: str, config_path: str = "./src/configs/training_config.toml"):
@@ -69,7 +68,6 @@ def train_ddpm(run_id: str, config_path: str = "./src/configs/training_config.to
         callbacks=[
             checkpoint_callback,
             LearningRateMonitor(logging_interval="step"),
-            # AMDGPUMonitor(interval=1.0, device_index=0),
             EarlyStopping(monitor="val_loss", mode="min", min_delta=0.0, patience=8)
         ],
         logger=TensorBoardLogger(save_dir="logs", name=str(run_id)),

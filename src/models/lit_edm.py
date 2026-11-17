@@ -139,24 +139,13 @@ class LitEDM(LitConditionalDiffusion):
 
     @log_time
     def training_step(self, batch, batch_idx):
-        if self.trainer.current_epoch == 1 and batch_idx == 0:
-            self.prof = profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA], acc_events=True, record_shapes=True)
-            self.prof.start()
-
-        with torch.profiler.record_function("dataloader"):
-            x0, condition = self._load_batch(batch)
+        x0, condition = self._load_batch(batch)
 
         # CFG dropout — randomly null the condition
         if torch.rand(1).item() < self.cfg_dropout:
             condition = torch.zeros_like(condition)
 
-        with torch.profiler.record_function("forward"):
-            loss = self._batch_loss((x0, condition))
-
-        # Stop profiler on last batch of first epoch and export trace to ./profiles/trace.json
-        if self.prof and self.trainer.current_epoch == 1 and batch_idx == len(self.trainer.train_dataloader) - 1:
-            self.prof.stop()
-            self.prof.export_chrome_trace("./profiles/trace.json")
+        loss = self._batch_loss((x0, condition))
 
         self.log("train_loss", loss.item(), prog_bar=False, on_step=True, on_epoch=True)
         return loss
