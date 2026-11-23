@@ -1,62 +1,54 @@
 \chapter{Methodology}
 
-\section{Modifications to the diffusion model}
+This section will describe how the relevant machine learning methods have been used in practise. The methodology described should not be seen as a ground truth or an upper bound on performance. The optimisation space has not been exhausted and the following will therefore only describe a set of good practices for the given problem.
 
-\subsection{Conditional Diffusion Models} \label{sec:conditioning}
+\section{DDPM and EDM}
 
-The "standard" sampling strategy (see \autoref{sec:sampling}) allows the model to draw a sample from the latent space representation it was trained to create. While this is useful for unconditional data generation, it does not help much on the task of \gls{downscaling}. For the \gls{downscaling} task, it is important to have a methods of relating the generated sample to the low-resolution input in sampling time. In other words, it is undesirable to re-train the model for each input condition. It would be much more desirable to request the \gls{downscaling} for a specific condition after the model is trained. This both allows us to train vastly fewer models, and it allows for training on multiple data-points.
-
-The method, on which we this thesis will be based, was developed by Saharia, et. al. \cite{sr-diffusion} in 2021 (among the authors is also Ho, Jonathan, who authored the original DDPM-paper referenced earlier). The paper explains the process of \gls{downscaling} (in the paper called super-resolution) by iterative refinement on a conditional diffusion model. For now, let's focus on the condition diffusion-part. 
-
-The approach is simple. During training the model is shown a high-resolution target image along with a high-resolution conditional image. The high-resolution conditional is generated using a bilinear/conservative (depending on the variable) interpolation of the low-resolution image, to the target scale \cite{sr-diffusion}. The target and condition are then concatenated on the channel dimension to create the input:
-\begin{equation}
-    X_t = \{ y, C \}
-\end{equation}
-Where $y$ is the target image, and $C$ is the conditional image.
-
-In sampling, this method works in a very similar way, only here there is no target. Instead the condition is concatenated to a noise sample, which fits the dimensionality of the desired target. This allows the network to have some information of the initial resolution of the image.
-
-The method comes with two caveats:
+The original task of this thesis was to adjust the \gls{ddpm} architecture to match the data space of the climate downscaling task. However, preliminary studies show, that the \gls{ddpm} architecture performs suboptimally for the complex task. Instead the final architecture is closer to an \gls{edm} (see \cref{sec:edm-background}). On the theoretical side, there are three main reasons to why the change was made.
 \begin{enumerate}
-    \item The backbone model needs to be designed specifically for this purpose, as the number of channels for the input changes. It therefore destroys any hope of using a standard pre-trained diffusion model.
-    \item We have to make the assumption that a model can, within reason, interpolate between the conditional data and the target data. In most cases this is a fair assumption, but in some cases the condition data originates from a different data set than the target data (foreshadowing...).
+    \item The preconditioning employed by the \gls{edm} greatly reduces the risk of instability-caused divergence during sampling. The method involves adding a large quantity of noise in early steps, which shifts the task from predicting the added noise to predicting the mean of the noise distribution. 
+    \item The changed loss-weighting in the \gls{edm} changes the task toward the later sampling steps, which along with the preconditioning, makes sure, that the divergence-rate of samples is shrunk. 
+    \item The second order sampler used for the \gls{edm} is created to be much more robust to early stage errors than the first order Newton method used in the \gls{ddpm} setup. The Langevin churn operation makes sure to add noise in the later, less noisy, sampling steps, effectively outshining the compounding errors of the sampler. Along side, the second order Heun solver allows the model to take non-linear steps through the differential space. This effect helps mitigate overshooting and diminishes the step-wise error at the cost of additional computation.
 \end{enumerate}
 
-\subsection{Residual Target Learning}
+As all of these points refer to how samples are drawn from the two models it is adamant to investigate the noise schedule of either model. This will give insight into what behaviour is expected and how it is caused.
+For the \gls{ddpm} it is customary to use the cosine schedule \cite{better-ddpm}. As mentioned in \cref{sec:noise_schedule} and \cref{eq:sample} the value of $\alpha_t$ plays a large role in the sampling process. It determines the overall weight of the predicted noise against the added sampling noise. 
 
-A common issue in machine learning is predicting the extreme. Logically, extremes do not often occur in data, and are therefore difficult to correctly predict for most machine learning models. Often, the predictions lie close to the overall mean of the target distribution. This is especially an issue in climate modelling as certain regions can exhibit locally extreme events. 
-
-Another issue is, that due to the nature of the mean squared error loss function, it is much easier to correctly model normally distributed data rather than odd, non-parametric distributions.
-
-To combat both issues, I propose to use residual target learning, similar to what is described in \cite{tomasi}. As the term "residual" is used in abundance throughout machine learning and climate science, let's first define residual target learning, then argue for why it solves the above issues.
-
-In this case residual target learning describes a \gls{downscaling} method in which the model, instead of directly predicting the values of the downscaled target, predicts the difference between the low-resolution and high-resolution data in each grid point. Formally, it could be described as:
-\begin{equation} \label{eq:residuals}
-    r_{t,c,i,j} = H_{t,c,i,j} - L_{t,c,i,j}
-\end{equation}
-Where $r$ is the residual between the high-resolution, $H$, and regridded (see \autoref{sec:regridding}) low-resolution, $L$, images. The dimensions are $(t,c,i,j)=$ time, channels, and two spatial dimensions.
-
-With this method, the model can instead predict the exact change it takes to pass from the known low-resolution data, to the high-resolution data. Instead of the model focussing on learning that e.g. the north is colder than the south, while also learning the anomalies between the two data sets, it can now focus its processing power on learning anomalies. This effectively solves the first of the above issues, as the extreme events are now stored in the low-resolution data.
-
-Residuals have an additional, useful property, namely that for randomly occurring errors, they are normally distributed. The error between the high- and low-resolution data is not quite random, there are some biases, as we can see in \autoref{fig:tas-11-timeseries} and \autoref{fig:pr-11-timeseries}. However, even with a clear bias, the distribution is much closer to normal than that of the absolute values.
+To show this effect one could investigate how a given sample travels from the noisy initialisation through the latent space of the model to the physical image space. It is desired that the predicted values of model converge during the sampling process. However, should the model become unstable the sampling values will diverge and the sample will be ruined.
+A small preliminary study shows both effects. 
 
 \begin{figure}[tb]
     \centering
-    \subbottom[Residual plot for mean surface temperature.]{\includegraphics[width=0.95\linewidth]{figures/method/residuals_tas_historical.png}}
+    \subbottom[Figure showing the convergence of mean and standard deviations during sampling of a \textbf{DDPM}.]{
+    \includegraphics[width=0.9\linewidth]{figures/method/ddpm_variance_plot.png}}
     ~
-    \subbottom[Residual plot for daily precipitation.]{\includegraphics[width=0.95\linewidth]{figures/method/residuals_pr_historical.png}}
-    \caption{Side-by-side of regridded low-resolution, high-resolution and residuals, with distributions shown below. The shows data is a mean of the historical reference period only. Residuals are computed according to \autoref{eq:residuals}.}
-    \label{fig:residuals}
+    \subbottom[Figure showing the convergence of mean and standard deviations during sampling of an \textbf{EDM}.]{
+    \includegraphics[width=0.9\linewidth]{figures/method/edm_variance_plot.png}}
+    \caption{The figure shows the mean and variance during sampling of the DDPM and EDM. It illustrates how the EDM has a much more stable sampling process due to it various improvements, while the DDPM end up diverging  the sample to extreme values. Each model is using the same 8.8M parameter UNet as a backbone and has been trained on identical subsets of the full dataset. The sample is created using 500 sampling steps, less than the ideal for the EDM, but required for the DDPM to not overflow.}
+    \label{fig:variance_plot}
 \end{figure}
 
-The described distributions can be seen in \autoref{fig:residuals}. It is clear that the absolute values in the left and middle columns are further from the near-normal distribution in the right column. For the mean temperatures the distributions are near symmetrical and not too far from something that one could call normal. However, they both have a bump on the right side, which is presumably caused by the higher temperatures in the North-Africa region. For the precipitation, the absolute values could never be symmetrically distributed, since the majority of days have near-zero precipitation. In the precipitation plot, we also notice the difference between the two climate models. It becomes clear that the high-resolution topography is especially important for the precipitation measure.
+In \cref{fig:variance_plot} we see the sampling process of the \gls{ddpm} and \gls{edm}. The difference in sampling strategies becomes clear. The figure shows how the early steps of the \gls{ddpm} sampling process has the mean value of the sample explode into extreme values, in this case as high 8330 (standardised values). The \gls{edm} uses the first 300 steps to place the mean values near their targets, then about 150 steps to bring down the internal deviation, and the last 100 steps to fine-tune values. While the final predicted values remain biased, they are significantly closer than the similar predictions from the \gls{ddpm}. 
 
-\subsection{Gamma-correction}
 
-In image processing, one might run into the issue, that the dark parts of an image are too dark, perhaps it hides features you wish to show or it results in an undesirable tone of the image. The issue often arises as the human is more sensitive to darker tones than the lighter ones (in line with Stevens's power law). In other, more statistical terms, the human eye perceives light with a heavy right-tailed distribution. 
 
-To correct for such behaviour, we can "correct" the image using gamma-correction \cite{gamma-correction}. Gamma-correction works by applying a power to the image intensities:
-\begin{equation}
-    s = cr^{\gamma}
-\end{equation}
-Where $r$ is the original image, $c$ and $\gamma$ are selected hyper-parameters, and $s$ is the corrected image.
+%% Spend more time describing the noise schedular and the alpha values to justify the behavior of the DDPM. We should also describe why this workd for normal images and not for climate data.
+
+
+\section{Conditioning}
+
+As described earlier, the conditioning used for this model is a lower resolution version of the target image, which is the standard \gls{downscaling} / super-resolution approach. However, there is a caveat in the process, which stems from the climate domain. The low-resolution and high-resolution images are not drawn from the same model, nor do they cover the same area. This changes the task from a classic super-resolution, as there is no proven connection between the low and high resolution images.
+
+The low and high resolution images being dissimilar is a direct effect of how the climate models are created. To create the high resolution model (in this case \gls{hclim}) a new layer of physics is added taking in new effects and improving the accuracy of the prediction. As the low resolution global model will not have the added physics engine, the samples will be different. One might show a storm in the Mediterranean, while the other shows the same storm over the Atlantic.
+While it is possible to train the model on a synthetically down sampled climate data set, that is not the desired product in this thesis. Instead we wish to create a model that translates between low and high resolution. 
+
+As mentioned, the low and high resolution images cover different areas. In practise this means, that the low resolution model (which is used as conditioning) has a larger domain than the high resolution model (see \cref{fig:domains}). This creates a trade-off effect. On one hand, having a direct relation between pixel values for conditioning and target could prove useful. On the other hand it is preferable to have as large of a conditioning area as possible, as it provides more information for the model. 
+
+\section{Runtime optimisation}
+
+\section{Sampling}
+
+\section{Hyperparameter optimisation}
+
+\section{Performance evaluation}
+%% Something about how we evaluate the model performance. Extremes prediction, RMSE (Skill), correlations, etc.
