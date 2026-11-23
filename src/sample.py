@@ -21,6 +21,8 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
+import pandas as pd
+
 from src.data_builders.dataloader import DataModule
 from src.data_builders.smhi_dataloader import parse_config
 from src.models import MODELREGISTRY
@@ -243,7 +245,7 @@ def main(
     out_root = Path(f"./samples/{run_id}/datamodule_{split}")
     sample_hparams = {
         "cfg_scale": cfg_scale, "eta": eta, 
-        "sample_type": sample_type, "save_metrics": False,
+        "sample_type": sample_type, "save_metrics": True,
         "S_churn": s_churn, "S_min": 500, "S_noise": 5.0
     }
     
@@ -254,7 +256,7 @@ def main(
         batch = move_batch_like_trainer(batch, model, datamodule, device)
         x, y, static, idx = batch
         target_vars = list(y.keys())  # same order _load_batch stacks them in
-        date = dataset.predictors.isel(time=dataset.indices[idx]).time.values
+        date = pd.to_datetime(dataset.z_pred['time'][int(idx[0])], unit="D", origin=pd.Timestamp("1850-01-01"))
 
         with torch.no_grad(), autocast:
             x0, condition = model._load_batch(batch)

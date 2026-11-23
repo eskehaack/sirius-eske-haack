@@ -467,16 +467,16 @@ class ChunkedZarrDataset(IterableDataset):
         self.target_variables = None
 
         # Read time coordinate once to build indices — cheap, just 4383 floats
-        z_pred = zarr.open(predictors_path, mode="r")
-        time = pd.to_datetime(z_pred["time"][:], unit="D", origin=pd.Timestamp("1850-01-01"))
-        all_indices = build_indices(time, blocks)  # your existing logic
+        self.z_pred = zarr.open(predictors_path, mode="r")
+        time = pd.to_datetime(self.z_pred["time"][:], unit="D", origin=pd.Timestamp("1850-01-01"))
+        self.all_indices = build_indices(time, blocks)  # your existing logic
 
         # Group indices by which chunk they fall into
-        chunk_size = z_pred["__xarray_dataarray_variable__"].chunks[0]
-        chunk_ids = all_indices // chunk_size
+        self.chunk_size = self.z_pred["__xarray_dataarray_variable__"].chunks[0]
+        chunk_ids = self.all_indices // self.chunk_size
         self.chunks = {}  # chunk_id -> array of local (within-chunk) indices
-        for global_idx, chunk_id in zip(all_indices, chunk_ids):
-            local_idx = global_idx % chunk_size
+        for global_idx, chunk_id in zip(self.all_indices, chunk_ids):
+            local_idx = global_idx % self.chunk_size
             self.chunks.setdefault(int(chunk_id), []).append(local_idx)
         self.chunk_ids = sorted(self.chunks.keys())
 
@@ -487,10 +487,27 @@ class ChunkedZarrDataset(IterableDataset):
                                  if var not in ("lat", "lon", "rlat", "rlon")])
         self.static_features = torch.from_numpy(static_array)
 
-        self.length = len(all_indices)
+        self.length = len(self.all_indices)
 
     def __len__(self):
         return self.length
+
+    def __getitem__(self, idx):
+        # idx here is a position in self.all_indices, not a timestep
+        global_t = self.all_indices[idx]
+
+        z_pred = zarr.open(self.predictors_path, mode="r")
+        z_targ = zarr.open(self.targets_path, mode="r")
+
+        x = torch.from_numpy(
+            z_pred["__xarray_dataarray_variable__"][global_t].astype(np.float32)
+        )
+        y_raw = torch.from_numpy(
+            z_targ["__xarray_dataarray_variable__"][global_t]
+        )
+        y = {var: y_raw[i] for i, var in enumerate(self.target_variables)}
+
+        return x, y, self.static_features, idx
 
     def __iter__(self):
         worker_info = torch.utils.data.get_worker_info()
