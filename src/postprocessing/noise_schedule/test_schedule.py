@@ -101,23 +101,23 @@ def noise_schedule(
 def test_noise_schedule():
     ts = np.linspace(0, TIMESTEPS - 1, N_TIMESTEP_SAMPLES, dtype=int)
 
-    fig_line, ax_line = plt.subplots(layout="constrained")
+    fig = plt.figure(figsize=pg.FIG_WIDE)
 
     for schedule in SCHEDULES:
         betas, alphas, alpha_bars = noise_schedule(
             schedule, TIMESTEPS, BETA_START, BETA_END
         )
 
-        ax_line.plot(ts, betas[ts], label=f"betas")
-        ax_line.plot(ts, alphas[ts], label=f"alphas")
-        ax_line.plot(ts, alpha_bars[ts], label=f"alpha_bars")
+        plt.plot(ts, betas[ts], label=f"betas")
+        plt.plot(ts, alphas[ts], label=f"alphas")
+        plt.plot(ts, alpha_bars[ts], label=f"alpha_bars")
 
-    ax_line.legend()
-    ax_line.set_xlabel("Timestep")
-    ax_line.set_ylabel("Value")
-    ax_line.set_title("Noise Schedule")
+    plt.legend()
+    plt.xlabel("Timestep")
+    plt.ylabel("Value")
+    plt.title("Noise Schedule")
 
-    return fig_line
+    return fig
 
 if __name__ == "__main__":
     pg.setup()
