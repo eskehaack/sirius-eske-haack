@@ -79,7 +79,7 @@ The section will start by introducing the forward process, where noise is added 
 Before diving into the diffusion process, let's define the necessary terms.
 
 The first, and most important, term is $X_t$, which describes the data input $X$ at time-step (or iteration) $t$. As $t$ increases $X$ will become increasingly noisy, until all signal is lost. To describe that process we introduce three new terms:
-\begin{equation}
+\begin{equation} \label{eq:schedule}
     \beta_t, \quad \alpha_t = 1- \beta_t, \quad \bar{\alpha}_t = \prod_{s=1}^t \alpha_s
 \end{equation}
 Where $\beta_t$ is the noise scheduler, which describes the magnitude of noise added in each step. This allows us to define the "noising process" as; 
@@ -183,6 +183,8 @@ In a surprising turn of events, this is everything needed to understand a diffus
 
 It is quite simple and elegant. The model only sees different levels of noise laid on the training data. During training the model wont try to remove noise, or sample image, it only models the noise added to create an understanding of what a clear image is.
 
+\newpage
+
 \subsection{Sampling} \label{sec:sampling}
 Sampling from the diffusion model is slightly more complicated than training. Here, the goal is to generate noise-free data points from a pure-noise starting point. To do so, we go back to \autoref{eq:diffusion-mean}. Let's use this term to iteratively reduce the noise in the pure-noise starting point. However, we might consider adding a term to the function. With the current formulation we sample from the learned latent-space noise-distribution at each step and subtract that from the current data point. Essentially, the model learns a full latent-space distribution, but only ever samples one point. If we instead sampled different points of that distribution, the model would go from a deterministic sampling to a stochastic one, which allows for creating slightly different samples in each step. Following the approach in \cite{ddpm}, we add a random term to the end of the sampling to push each sample sightly in the latent space, leaving us with the following formulation:
 \begin{equation} \label{eq:sample}
@@ -206,23 +208,30 @@ Which is also seen in \cite{ddpm}. It describes the most basic version of stocha
 
 In \cite{org-diffusion} Sohl-Dickstein describes a method to "guide" the diffusion process, similar to that of guided GAN-models \cite{gan}. Here, a classifier is trained, separately to the main model (GAN or diffusion), in the sampling process, the gradients of the classifier will "pull" the main sampler in the direction of the class, resulting in an output more similar to the general latent space representation of the class.
 
-Building on that Ho, et. al. (again) introduces a "classifier-free guidance" technique, in which the same principal is used, only here there is no need to train a separate model. Instead the diffusion model is trained by sometimes adding the conditioning, and sometimes not. When sampling the model uses a weighted average between in non-conditioned, and the conditioned model output to determine the correct noise-prediction. N.B. the conditioning does not have to be a similar input to that referred to in \autoref{sec:conditioning}.
+Building on that Ho, et. al. (again) introduces a "classifier-free guidance" (CFG) technique, in which the same principal is used, only here there is no need to train a separate model \cite{cfg-diffusion}. Instead the diffusion model is trained by occasionally replacing the conditioning with a "null-condition" (a condition build of only zeros). When sampling the model uses a weighted average between non-conditioned, and the conditioned model output to determine the correct noise-prediction. The weighted average used during sampling is defined as:
+\begin{equation}
+    \epsilon_{\theta} = \epsilon_{\text{uncond}} - w(\epsilon_{\text{cond}} - \epsilon_{\text{uncond}})
+\end{equation}
+Where $\epsilon_{\text{cond}}$ and $\epsilon_{\text{uncond}}$ are the conditional and unconditional noise predictions, and $w$ is the weight (often referred to as the "CFG-scale").
 
-Both methods are somewhat limiting, classifier guidance is limiting to a one-hot encoded class label, while classifier-free guidance limits by requiring a retraining of the model for each guidance strategy. To circumvent those restrictions, Bansal, et. al. \cite{universal-guidance} proposes "Universal guidance", similar to classifier guidance. Here, the gradients of any model can be used to guide the diffusion process toward a desired sample. In \cite{universal-guidance} the process is described as follows.
 
-We define a model, $f$, with loss function, $l$, and condition/class $c$. To find the correct gradient, we find:
-\begin{equation}
-    \Delta_{X_t} = \text{arg} \min_{\Delta} l(c, f(\hat{X}_0+\Delta))
-\end{equation}
-Where $\hat{X}_0$ is the predicted sample of $X_0$ and $\Delta$ is the gradient. (Note the difference in notation from the original paper, making the expression more clear). When found, the gradient can be applied to the data point at timestep $t$ by stepping forward, like \autoref{eq:forward-process}:
-\begin{equation}
-    X_t = \sqrt{\bar{\alpha}_t}(\hat{X}_0 + \Delta_{X_t}) + \sqrt{1-\bar{\alpha}_t} \epsilon_{\theta}(X_t,t)
-\end{equation}
-Which allows the augmented reverse step to be formulated as:
-\begin{equation}
-    \tilde{\epsilon}_{\theta} (X_t, X_0) = \epsilon_{\theta}(X_t,t) - \sqrt{\bar{\alpha}_t / (1 - \bar{\alpha}_t)}\Delta_{X_t}
-\end{equation}
-Replace $\epsilon_{\theta}$ with $\tilde{\epsilon}_{\theta}$ in \autoref{eq:sample} and you have a sampling scheme build to inference-time guidance with no re-training needed.
+
+% Universal guidance
+% Both methods are somewhat limiting, classifier guidance is limiting to a one-hot encoded class label, while classifier-free guidance limits by requiring a retraining of the model for each guidance strategy. To circumvent those restrictions, Bansal, et. al. \cite{universal-guidance} proposes "Universal guidance", similar to classifier guidance. Here, the gradients of any model can be used to guide the diffusion process toward a desired sample. In \cite{universal-guidance} the process is described as follows.
+
+% We define a model, $f$, with loss function, $l$, and condition/class $c$. To find the correct gradient, we find:
+% \begin{equation}
+%     \Delta_{X_t} = \text{arg} \min_{\Delta} l(c, f(\hat{X}_0+\Delta))
+% \end{equation}
+% Where $\hat{X}_0$ is the predicted sample of $X_0$ and $\Delta$ is the gradient. (Note the difference in notation from the original paper, making the expression more clear). When found, the gradient can be applied to the data point at timestep $t$ by stepping forward, like \autoref{eq:forward-process}:
+% \begin{equation}
+%     X_t = \sqrt{\bar{\alpha}_t}(\hat{X}_0 + \Delta_{X_t}) + \sqrt{1-\bar{\alpha}_t} \epsilon_{\theta}(X_t,t)
+% \end{equation}
+% Which allows the augmented reverse step to be formulated as:
+% \begin{equation}
+%     \tilde{\epsilon}_{\theta} (X_t, X_0) = \epsilon_{\theta}(X_t,t) - \sqrt{\bar{\alpha}_t / (1 - \bar{\alpha}_t)}\Delta_{X_t}
+% \end{equation}
+% Replace $\epsilon_{\theta}$ with $\tilde{\epsilon}_{\theta}$ in \autoref{eq:sample} and you have a sampling scheme build to inference-time guidance with no re-training needed.
 
 \subsubsection{Ensemble sampling}
 
@@ -230,19 +239,167 @@ An important part of the sampling process of the DDPM is the extra noise added (
 
 From a machine learning perspective, this is a marvellous trait. It allows the model to generate several estimations of the same system, drawn from the same distribution. So even though the diffusion model isn't inherently probabilistic model, the parametrization can be estimated with the Monte Carlo method.
 
-\subsection{Intuition of the diffusion process}
+% \subsection{Intuition of the diffusion process}
 
-Mathematics and probability theory is good for precise definition, but can we map the above derivations to an intuitive understanding of the generative process? This is my best...
+% Mathematics and probability theory is good for precise definition, but can we map the above derivations to an intuitive understanding of the generative process? This is my best...
 
-Jumping back to the cup of coffee with milk mentioned in the beginning of the chapter. Let's map the mixing of milk and coffee to a discrete time series, e.g; one measurement every millisecond. The model learns by looking at the time-slices of the mixing process. One millisecond the milk is separate from coffee, the next they are slightly mixed, and so on. The model ask the question; "For the milk to get from here (in time-step 0) to here (in time-step 1) how did the milk move?" To answer this question, it begins to model a probability distribution, for each drop of milk in the cup, what is the probability that the drop moved in a certain direction. Now, let's repeat this in the next time-step, and the next, and so on. Every time looking at how the milk droplets moved from step 0 to the current step.
-In the end, this yields a set of distributions corresponding to the number of time-steps, where each distribution has a dimensionality corresponding to the number of droplets of milk in the cup, and each point in the distribution mapping a probability of a direction this droplet moved to end up here. Theoretically, if the model looks at enough of these scenarios, perhaps from different cups of coffee, the milk distribution will correctly model how the milk mixes into the coffee at each step. We call this distribution the "likelihood-distribution".
+% Jumping back to the cup of coffee with milk mentioned in the beginning of the chapter. Let's map the mixing of milk and coffee to a discrete time series, e.g; one measurement every millisecond. The model learns by looking at the time-slices of the mixing process. One millisecond the milk is separate from coffee, the next they are slightly mixed, and so on. The model ask the question; "For the milk to get from here (in time-step 0) to here (in time-step 1) how did the milk move?" To answer this question, it begins to model a probability distribution, for each drop of milk in the cup, what is the probability that the drop moved in a certain direction. Now, let's repeat this in the next time-step, and the next, and so on. Every time looking at how the milk droplets moved from step 0 to the current step.
+% In the end, this yields a set of distributions corresponding to the number of time-steps, where each distribution has a dimensionality corresponding to the number of droplets of milk in the cup, and each point in the distribution mapping a probability of a direction this droplet moved to end up here. Theoretically, if the model looks at enough of these scenarios, perhaps from different cups of coffee, the milk distribution will correctly model how the milk mixes into the coffee at each step. We call this distribution the "likelihood-distribution".
 
-With a perfectly learned likelihood distribution, "unstirring" the milk will be a cake-walk. Let's assume we have a cup of coffee were the milk is completely mixed with the coffee. You made it 2 hours ago, stirred in the cold milk with one of those disposable wooden spatulas, forgot to bring it to your meeting, and now is just sitting there cold, stirred, and sad. Luckily, this is the exact state your model desires. You ask the model, if I ignored the most basic laws of chemical bonds, how would I move the milk droplets in this cup to unstir it; not all the way, just turning time back one millisecond. Together, you look at the likelihood-distribution for the last step. For each droplet of milk, you can see, what direction would maximize the probability (i.e. the likelihood) of a "clean" cup of coffee. You then move the droplets accordingly and review the new state of the cup. You review the likelihood-distribution for T-1, move droplets and asses. As you move towards t=0 the milk droplets clump together more and more until they finally separate from the coffee completely. This is the denoising diffusion process.
+% With a perfectly learned likelihood distribution, "unstirring" the milk will be a cake-walk. Let's assume we have a cup of coffee were the milk is completely mixed with the coffee. You made it 2 hours ago, stirred in the cold milk with one of those disposable wooden spatulas, forgot to bring it to your meeting, and now is just sitting there cold, stirred, and sad. Luckily, this is the exact state your model desires. You ask the model, if I ignored the most basic laws of chemical bonds, how would I move the milk droplets in this cup to unstir it; not all the way, just turning time back one millisecond. Together, you look at the likelihood-distribution for the last step. For each droplet of milk, you can see, what direction would maximize the probability (i.e. the likelihood) of a "clean" cup of coffee. You then move the droplets accordingly and review the new state of the cup. You review the likelihood-distribution for T-1, move droplets and asses. As you move towards t=0 the milk droplets clump together more and more until they finally separate from the coffee completely. This is the denoising diffusion process.
 
-Now that we have this flawless analogy, I would like to use it to explain some modifications and variations of the diffusion model. Let's start with the difference between probabilistic sampling (like the DDPM) and deterministic / implicit sampling (like DDIM). The process described above is, in reality, a DDIM. In each time-step we take the best estimated action to remove the milk. If you simply care about getting the milk out, this is definitely the way to do it. You might, however, care about the shape of the final milk clump (yes, I'm using the shape of a clump of milk as an analogy for a generated data sample). By using the most certain direction for each milk droplet, in each time-step, you will always reach the same final milk clump shape, but what if you actually wanted to unstir the milk to have a specific shape, like a heart or a rabbit? In that case you might add a bit of random noise to the direction chosen for each droplet, in each time-step. Not a lot of noise, just an ever so small nudge. This way, the shape of the milk clump would be new every time you unstirred the coffee. Sure, the clump would look like the ones from the when you were training the model, but they would be new... random. Do this enough time, and you might get your milk clump rabbit.
+% Now that we have this flawless analogy, I would like to use it to explain some modifications and variations of the diffusion model. Let's start with the difference between probabilistic sampling (like the DDPM) and deterministic / implicit sampling (like DDIM). The process described above is, in reality, a DDIM. In each time-step we take the best estimated action to remove the milk. If you simply care about getting the milk out, this is definitely the way to do it. You might, however, care about the shape of the final milk clump (yes, I'm using the shape of a clump of milk as an analogy for a generated data sample). By using the most certain direction for each milk droplet, in each time-step, you will always reach the same final milk clump shape, but what if you actually wanted to unstir the milk to have a specific shape, like a heart or a rabbit? In that case you might add a bit of random noise to the direction chosen for each droplet, in each time-step. Not a lot of noise, just an ever so small nudge. This way, the shape of the milk clump would be new every time you unstirred the coffee. Sure, the clump would look like the ones from the when you were training the model, but they would be new... random. Do this enough time, and you might get your milk clump rabbit.
 
-If you every get tired of unstirring coffee to make milk clump rabbits and think to yourself, there must be a better way, then you are right. The better way is guidance (or guided sampling). In this version, you are not only moving the droplets in the optimal way to unstir, you are moving them in the direction that most looks like a rabbit. To do so, you have trained a model to look at stirred coffee-milk and classify it as either "rabbit" or "no rabbit". When you now asses the likelihood-distribution to determine direction for the milk droplets, you also look at the gradients of the classification model and see what direction would most likely lead to a rabbit. This specific guidance is classifier guidance, but this can also be done using other models with tractable gradients (universal guidance) or even by training the original likelihood-distribution to be conditional on various labels (classifier-free guidance)
+% If you every get tired of unstirring coffee to make milk clump rabbits and think to yourself, there must be a better way, then you are right. The better way is guidance (or guided sampling). In this version, you are not only moving the droplets in the optimal way to unstir, you are moving them in the direction that most looks like a rabbit. To do so, you have trained a model to look at stirred coffee-milk and classify it as either "rabbit" or "no rabbit". When you now asses the likelihood-distribution to determine direction for the milk droplets, you also look at the gradients of the classification model and see what direction would most likely lead to a rabbit. This specific guidance is classifier guidance, but this can also be done using other models with tractable gradients (universal guidance) or even by training the original likelihood-distribution to be conditional on various labels (classifier-free guidance)
 
-Guidance is not the only way to help the model produce a desirable result. A common technique is also conditioning. In conditioning you give the model a... well condition, for each sample in the training. Let's say that while training the model, every time you made a new cup of coffee and stirred in milk while the model observed, you also held up a sign saying what day of the week it is. Eventually the model would notice, that on Mondays you typically poured the milk in more vigorously, making the initial clump of milk more scattered, where as on Thursdays you poured the milk in calmly, creating a more connected clump. When you now want to unstir your coffee, you still tell the model what day it is, and it makes sure to model the final clump of milk to look similar to the ones you created on the same days; Mondays more scattered, Thursdays more connected. This technique could be used for a number of other purposes, perhaps you wanted to give the model an idea of how the milk looks when unstirred. Obviously, you cannot depict this, before actually unstirring your coffee, but your friends over at the Institute of Milk-Physics have made a numerical model, which create a very low-resolution picture of how the milk looks when unstirred (this is the type of conditioning used in this thesis).
+% Guidance is not the only way to help the model produce a desirable result. A common technique is also conditioning. In conditioning you give the model a... well condition, for each sample in the training. Let's say that while training the model, every time you made a new cup of coffee and stirred in milk while the model observed, you also held up a sign saying what day of the week it is. Eventually the model would notice, that on Mondays you typically poured the milk in more vigorously, making the initial clump of milk more scattered, where as on Thursdays you poured the milk in calmly, creating a more connected clump. When you now want to unstir your coffee, you still tell the model what day it is, and it makes sure to model the final clump of milk to look similar to the ones you created on the same days; Mondays more scattered, Thursdays more connected. This technique could be used for a number of other purposes, perhaps you wanted to give the model an idea of how the milk looks when unstirred. Obviously, you cannot depict this, before actually unstirring your coffee, but your friends over at the Institute of Milk-Physics have made a numerical model, which create a very low-resolution picture of how the milk looks when unstirred (this is the type of conditioning used in this thesis).
 
-Finally, we should discuss an important part of the system, which isn't related to the model, namely the stirring method (this is an analogy for a noise schedule). Imagine, that instead of stirring with a wooden spatula, you used a spoon, or a kitchen aid. Obviously the movement pattern of the milk droplets would change. The number of time-steps it takes to completely stir the milk changes and the distribution of movement is different, but the initial and final (t=0 and t=T) distributions will always be the same. Depending on the exact problem, it might be more or less beneficial to use various noise schedules. 
+% Finally, we should discuss an important part of the system, which isn't related to the model, namely the stirring method (this is an analogy for a noise schedule). Imagine, that instead of stirring with a wooden spatula, you used a spoon, or a kitchen aid. Obviously the movement pattern of the milk droplets would change. The number of time-steps it takes to completely stir the milk changes and the distribution of movement is different, but the initial and final (t=0 and t=T) distributions will always be the same. Depending on the exact problem, it might be more or less beneficial to use various noise schedules. 
+
+\subsection{Conditional Diffusion Models} \label{sec:conditioning}
+
+The "standard" sampling strategy (see \autoref{sec:sampling}) allows the model to draw a sample from the latent space representation it was trained to create. While this is useful for unconditional data generation, it does not help much on the task of \gls{downscaling}. For the \gls{downscaling} task, it is important to have a methods of relating the generated sample to the low-resolution input in sampling time. In other words, it is undesirable to re-train the model for each input condition. It would be much more desirable to request the \gls{downscaling} for a specific condition after the model is trained. This both allows us to train vastly fewer models, and it allows for training on multiple data-points.
+
+The method, on which we this thesis will be based, was developed by Saharia, et. al. \cite{sr-diffusion} in 2021 (among the authors is also Ho, Jonathan, who authored the original DDPM-paper referenced earlier). The paper explains the process of \gls{downscaling} (in the paper called super-resolution) by iterative refinement on a conditional diffusion model. For now, let's focus on the condition diffusion-part. 
+
+The approach is simple. During training the model is shown a high-resolution target image along with a high-resolution conditional image. The high-resolution conditional is generated using a bilinear/conservative (depending on the variable) interpolation of the low-resolution image, to the target scale \cite{sr-diffusion}. The target and condition are then concatenated on the channel dimension to create the input:
+\begin{equation}
+    X_t = \{ y, C \}
+\end{equation}
+Where $y$ is the target image, and $C$ is the conditional image.
+
+In sampling, this method works in a very similar way, only here there is no target. Instead the condition is concatenated to a noise sample, which fits the dimensionality of the desired target. This allows the network to have some information of the initial resolution of the image.
+
+The method comes with two caveats:
+\begin{enumerate}
+    \item The backbone model needs to be designed specifically for this purpose, as the number of channels for the input changes. It therefore destroys any hope of using a standard pre-trained diffusion model.
+    \item We have to make the assumption that a model can, within reason, interpolate between the conditional data and the target data. In most cases this is a fair assumption, but in some cases the condition data originates from a different data set than the target data (foreshadowing...).
+\end{enumerate}
+
+\subsection{Residual Target Learning}
+
+A common issue in machine learning is predicting the extreme. Logically, extremes do not often occur in data, and are therefore difficult to correctly predict for most machine learning models. Often, the predictions lie close to the overall mean of the target distribution. This is especially an issue in climate modelling as certain regions can exhibit locally extreme events. 
+
+Another issue is, that due to the nature of the mean squared error loss function, it is much easier to correctly model normally distributed data rather than odd, non-parametric distributions.
+
+To combat both issues, I propose to use residual target learning, similar to what is described in \cite{tomasi}. As the term "residual" is used in abundance throughout machine learning and climate science, let's first define residual target learning, then argue for why it solves the above issues.
+
+In this case residual target learning describes a \gls{downscaling} method in which the model, instead of directly predicting the values of the downscaled target, predicts the difference between the low-resolution and high-resolution data in each grid point. Formally, it could be described as:
+\begin{equation} \label{eq:residuals}
+    r_{t,c,i,j} = H_{t,c,i,j} - L_{t,c,i,j}
+\end{equation}
+Where $r$ is the residual between the high-resolution, $H$, and regridded (see \autoref{sec:regridding}) low-resolution, $L$, images. The dimensions are $(t,c,i,j)=$ time, channels, and two spatial dimensions.
+
+With this method, the model can instead predict the exact change it takes to pass from the known low-resolution data, to the high-resolution data. Instead of the model focussing on learning that e.g. the north is colder than the south, while also learning the anomalies between the two data sets, it can now focus its processing power on learning anomalies. This effectively solves the first of the above issues, as the extreme events are now stored in the low-resolution data.
+
+Residuals have an additional, useful property, namely that for randomly occurring errors, they are normally distributed. The error between the high- and low-resolution data is not quite random, there are some biases, as we can see in \autoref{fig:tas-11-timeseries} and \autoref{fig:pr-11-timeseries}. However, even with a clear bias, the distribution is much closer to normal than that of the absolute values.
+
+\begin{figure}[tb]
+    \centering
+    \subbottom[Residual plot for mean surface temperature.]{\includegraphics[width=0.95\linewidth]{figures/method/residuals_tas_historical.png}}
+    ~
+    \subbottom[Residual plot for daily precipitation.]{\includegraphics[width=0.95\linewidth]{figures/method/residuals_pr_historical.png}}
+    \caption{Side-by-side of regridded low-resolution, high-resolution and residuals, with distributions shown below. The shows data is a mean of the historical reference period only. Residuals are computed according to \autoref{eq:residuals}.}
+    \label{fig:residuals}
+\end{figure}
+
+The described distributions can be seen in \autoref{fig:residuals}. It is clear that the absolute values in the left and middle columns are further from the near-normal distribution in the right column. For the mean temperatures the distributions are near symmetrical and not too far from something that one could call normal. However, they both have a bump on the right side, which is presumably caused by the higher temperatures in the North-Africa region. For the precipitation, the absolute values could never be symmetrically distributed, since the majority of days have near-zero precipitation. In the precipitation plot, we also notice the difference between the two climate models. It becomes clear that the high-resolution topography is especially important for the precipitation measure.
+
+\subsection{Noise Schedule} \label{sec:noise_schedule}
+
+The noise schedule in a diffusion model describes the rate at which noise is applied, during training, and thus also the rate at which noise is removed during sampling. In the mathematical notation, the noise schedule defines the $\beta$, $\alpha$, and $\bar{\alpha}$ parameters used in \cref{eq:schedule}. In the original DDPM paper \cite{ddpm} uses a "linear" schedule, in which "linear" describes that the $\beta$-values are set as a linear gradient between two fixed values. However, in recent diffusion literature it was discovered that the noise schedule is a hyperparameter of utmost importance \cite{edm}. There are two primary points, in which the effect of the noise schedule can be measured. The first derives from the loss function of the diffusion model. The loss function is defined as:
+\begin{equation}
+    \mathcal{L}_{\theta} = ||\epsilon_t - \epsilon_{\theta}||^2
+\end{equation}
+Where
+\begin{equation}
+    \epsilon_t = \frac{X_t - \sqrt{\bar{\alpha}_t}X_0}{\sqrt{1-\bar{\alpha}_t}}, \quad \epsilon_{\theta} = \frac{X_t - \sqrt{\bar{\alpha}_t}X_{\theta}}{\sqrt{1-\bar{\alpha}_t}}
+\end{equation}
+It can be seen, already here, that the $\bar{\alpha}$ parameter influences the task of the model training. To further analyse that influence, let's rewrite the loss function in terms of the $\bar{\alpha}$ value:
+\begin{align}
+    || \epsilon - \epsilon_{\theta}||^2 &= 
+    \left| \left| \frac{X_t - \sqrt{\bar{\alpha}_t}X_0}{\sqrt{1-\bar{\alpha}_t}} - \frac{X_t - \sqrt{\bar{\alpha}_t}X_{\theta}}{\sqrt{1-\bar{\alpha}_t}} \right| \right|^2 \\
+    &= \left| \left| \left( \frac{X_t}{\sqrt{1-\bar{\alpha}_t}} - \frac{\sqrt{\bar{\alpha}_t}X_0}{\sqrt{1-\bar{\alpha}_t}} \right) - \left( \frac{X_t}{\sqrt{1-\bar{\alpha}_t}} -\frac{\sqrt{\bar{\alpha}_t}X_{\theta}}{\sqrt{1-\bar{\alpha}_t}} \right) \right| \right| ^2 \\
+    &= \left| \left| - \frac{\sqrt{\bar{\alpha}_t}X_0}{\sqrt{1-\bar{\alpha}_t}} + \frac{\sqrt{\bar{\alpha}_t}X_{\theta}}{\sqrt{1-\bar{\alpha}_t}} \right| \right| ^2 \\
+    &= \frac{\sqrt{\bar{\alpha}_t}}{\sqrt{1-\bar{\alpha}_t}} \left| \left| X_{\theta} - X_0 \right| \right| ^2
+\end{align}
+From the above, it is obvious that the original loss term is equal to the reproduction error (here denoted $||X_{\theta} - X_0||^2$) weighted by a function of the $\bar{\alpha}$ values. The weighting term, if compared to the definition of $X_t$ from \cref{eq:forward-process}, is the signal-to-noise ratio (SNR) of the forward process.
+
+Summarising in layman terms, the task of the training is defined by how well the model recreates target images, weighted by how much noise was applied to image. With low SNR the task is more difficult, and thus weighted less in the final output. In high SNR timesteps, the model is expected to recreate the image more accurately, and will therefore be evaluated more critically.
+
+The other touchpoint, in which the noise schedule plays an important role, is the sampling process. Recall again the definition of the sampling process in \cref{eq:estimated-mean}. Notice how the term is weighted by $1 / \sqrt{\alpha}$, another parameter controlled by the noise schedule. This gives the prediction higher values when $\alpha$, and thus the SNR, is near zero. While this does give the model potential to explore in the beginning of its denoising process, it has the potential to explode the initial prediction and throwing the model in the wrong direction. %% Evil laughing and scenes of foreshadowing intesifies.
+
+\subsubsection{Linear Schedule}
+
+The linear schedule is simply, yet elegantly, defined using a linear gradient. Here we describe $\beta$, $\alpha$, and $\bar{\alpha}$ as the following:
+\begin{equation}
+    \beta_t = \beta_{\text{start}} + t/T (\beta_{\text{end}} - \beta_{\text{start}}), \quad \alpha_t = 1-\beta_t, \quad \bar{\alpha}_t = \prod_{k=1}^{t} \alpha_k
+\end{equation}
+Where $\beta_{\text{start}}$ and $\beta_{\text{end}}$ are hyperparameters and $T$ is the total amount of timesteps in the training.
+
+\subsubsection{Cosine Schedule}
+
+In many image generation tasks, it is preferable to use a noise schedule, in which the signal is degraded slower than it does in the linear schedule, an idea explored in \cite{better-ddpm}. This strengthens the image signal throughput to the model, and enables a finer understanding of the details in the data. To give this effect the cosine schedule was invented in \cite{better-ddpm}. In the cosine schedule $\beta$, $\alpha$, and $\bar{\alpha}$ are defined as:
+\begin{equation}
+    \bar{\alpha}_t = \cos^2 \left( \frac{t/T + s}{1 + s} \right), \quad \beta_t = 1 - \frac{\bar{\alpha}_t}{\bar{\alpha}_{t-1}}, \quad \alpha_t = 1 - \beta_t
+\end{equation}
+Where $s$ is another hyperparameter.
+
+\subsection{Elucidating Diffusion Models} \label{sec:edm-background}
+
+Elucidating Diffusion Models (or EDMs) were introduced in \cite{edm} and later used for the climate downscaling task in \cite{thea}. The model addresses a few limitations in the original DDPM setup (\cite{ddpm}) and refines the model architecture significantly, becoming the state-of-the-art model for the standard FID task. In the following section I will address a few of the most influential improvements.
+
+\subsubsection{Preconditioning}
+
+As previously discussed the training objective of the diffusion model is, per \cite{ddpm}, to model the noise added to a given data point at each timestep, and subsequently scale and subtract it, rather than predicting the reconstructed image directly. This removes the variance instability otherwise gained by the different SNR's during training. However, it shifts the task from image generation to noise generation, which can have implications for the sample quality. One of those implications is the scaling applied to the noise level. In the above section (see \cref{sec:noise_schedule}) this scaling is described as the SNR, and it is mentioned that it can become unstable at low $\alpha$-values. In the EDM paper (\cite{edm}) this issue is addressed by computing a combination of the direct reconstruction image, and the noise added, a so-called preconditioning. They redefine the prediction task as:
+\begin{equation} \label{eq:edm_loss}
+    D_{\theta}(X, \sigma)=c_{\text{skip}}(\sigma) X + c_{\text{out}}(\sigma)F_{\theta} \left( c_{\text{in}}(\sigma)X; c_{\text{noise}}(\sigma) \right)
+\end{equation}
+Where $D$ is the denoising function, $F$ is the neural network, and the $c$ parameters are hyperparameters that allow different scaling of noise and signal predictions:
+
+$c_{\text{skip}}$ describes the weight of the skip-connections. This parameter is what creates the effect of the model combining both noisy and absolute predictions. If we rewrite \cref{eq:edm_loss}, the effect becomes more clear: 
+\begin{equation}
+    F_{\theta} \left( c_{\text{in}}(\sigma)X; c_{\text{noise}}(\sigma) \right) = \frac{D_{\theta}(X, \sigma) - c_{\text{skip}}(\sigma) X}{c_{\text{out}}(\sigma)}
+\end{equation}
+See how $c_{\text{skip}}$ scales the amount of noise with which the model is tasked to predict. With a high $c_{\text{skip}}$ value, the amount of added noise the model predicts should be equally high, and vice versa. The $c_{\text{skip}}$ parameter is defined as: 
+\begin{equation}
+    c_{\text{skip}} = \frac{\sigma_{\text{data}}^2}{\sigma_{\text{noise}}^2 + \sigma_{\text{data}}^2}
+\end{equation}
+Where $\sigma_{\text{data}}$ is a set hyperparameter and $\sigma_{\text{noise}}$ is a log-normal distribution defined from the two hyper-parameters $P_{\text{mean}}$ and $P_{\text{std}}$. \\
+$c_{\text{in}}$ standardises the input to unit variance before it enters the model. Since noise has been added to the input: $X_t = X_0 + \epsilon, \epsilon \sim \mathcal{N}(0, \sigma^2 I)$, it is important to make sure that the input is rescaled to fit the standard distribution, therefore $c_{\text{in}}$ is simply defined as:
+\begin{equation}
+    c_{\text{in}} = \frac{1}{\sqrt{\sigma_{\text{noise}}^2 + \sigma_{\text{data}}^2}}
+\end{equation}
+Where $\sigma$ and $\sigma_{\text{data}}$ are the same parameters as above. \\
+$c_{\text{out}}$ has a similar effect on the output as $c_{\text{in}}$ has on the input. The idea is to scale the regression output to fit within reasonable metrics, thus avoiding exploding predictions. It directly counteracts one of the main issues in the original DDPM setup, in which predictions would explode in high-noise steps due to the difficult task. To apply the proper scaling, $c_{\text{out}}$ is defined as:
+\begin{equation}
+    c_{\text{out}} = \frac{\sigma_{\text{noise}} \cdot \sigma_{\text{data}}}{\sqrt{\sigma_{\text{noise}}^2 + \sigma_{\text{data}}^2}}
+\end{equation}
+Where $\sigma$ and $\sigma_{\text{data}}$ are the same parameters as above.
+
+\subsubsection{Noise distribution}
+
+As mentioned above, the noise parameter $\sigma_{\text{noise}}$ is controlled by a log-normal distribution, with the following parametrisation:
+\begin{equation}
+    \log \sigma_{\text{noise}} \sim \mathcal{N}(P_{\text{mean}}, P_{\text{std}}^2 I)
+\end{equation}
+This replaces the uniform distribution used in the DDPM. The effect is a reweighing of the timesteps, as the log-normal distribution yields much fewer high-noise steps. Instead the model can focus mostly on the important mid-range steps. 
+
+\subsubsection{Loss weighting}
+
+Another feature of the EDM reformulation is the scaling and reconfiguration of the loss function. As a result of the above preconditioning it is now possible to retask the diffusion model, and thus evaluate, the diffusion model on predicting reconstructions, rather than noise. However, this creates a similar issue to what was experienced with the DDPM. The early, high-noise, steps dominate the model training. Not because those steps are handled by a worse model, but because the task is much more difficult. To avoid this effect having a defining effect on the final model, the loss is scaled by a factor, $\lambda(\sigma)$. Much like the $c$-parameters, the $\lambda$-parameter is essentially scaling the loss down, to what would be expected, if both target and input had unit variance. With this parameter in place, the final training term can be written out:
+\begin{equation}
+    \mathbb{E}_{\sigma, Y, N} \left[ \lambda(\sigma) || c_{\text{out}}^2(\sigma) F_{\theta}(c_{\text{out}}(\sigma) \cdot (Y + N); c_{\text{noise}}(\sigma)) - 
+        (Y - c_{\text{skip}}(\sigma) \cdot (Y + N) ||_2^2 \right]
+\end{equation}
+To the left of the subtraction is the network output describing how the target, $Y$, is noised with $N \sim \mathcal{N}(0, \sigma_{\text{noise}}^2 I)$ to produce the predicted noise. The right side of the subtraction describes the model target in which the noisy input $(Y+N)$ is scaled and subtracted from the clear input, $Y$. Finally the norm yields a standard MSE loss which is scaled by $\lambda$ to account for the imbalance in loss values.
+
+As a whole, the EDM approach is implementing a few strategic steps of normalisation, making sure that predictions a scaled equally no matter their quality, and that tasks are weighted according to their difficulty, avoiding the exploding predictions of the DDPM.
+
+\subsubsection{Second order sampling}
+
+Lastly, we will discuss the second order stochastic sampler used in the EDM setup. In short, it combines a second order Heun sampler with a stochastic Langevin operation, which adds and removes noise. This replaces the first order Euler sampler used in DDPM. 
+
+The sampling process, as a whole, can be described as a stochastic differential equation (SDE), in which the input is the a random sample from the latent-space dimension created during training. Solving the sampling SDE perfectly is of-course impossible, and only an approximation can be made. The first order example uses Euler's method for solving SDEs, calculate the direction (by predicting added noise using the network), then take one small step using \cref{eq:diffusion-mean}. The second order method described in the EDM paper utilises the Runge-Kutta method to solve the SDE. While this method gives a more smooth journey through the discrete solution steps, it comes with the disadvantage of having to run two inference steps per denoising step, doubling the number of model inferences done during sampling. More specifically the approach is a second order Heun sampler. In this method the sampler computes a scaled noise prediction of step $t$, and a scaled prediction of step $t+1$ then, using the trapezoidal rule, it computes the desired direction and steps. To add stochasticity, the sampler will add Gaussian noise, but in a different fashion than the DDPM sampler. In the EDM sctochastic sampler there is an argument, $\gamma_t$, which describes a step size, moving the timestep from the current step, $t_i$, to a more noisy step, $\hat{t}_i = t_i + \gamma_i t_i$. Random Gaussian noise is then scaled (by: $\sqrt{\hat{t}_i^2 - t_i^2}$) and added to the existing sample $x_i$. The network inference step is computed with the moved $\hat{X}_i$ and scaled by $\hat{t}_i$. For the second order step, the method is equal to the deterministic version.
+
+In the end there are a multitude of ways of computing the SDE solution and which is optimal depends heavily on the task, but this version leverages computation and truncation error well for image generationm, fitting with the remaining EDM setup.
