@@ -56,11 +56,11 @@ srun --account=project_465002687 singularity exec \
     --bind /scratch/project_465002687 \
     "$SIF" \
     python -m src.sample \
-        --run_id "23522809" \
+        --run_id "23886318" \
         --checkpoint "last" \
         --batch_index 0 \
         --ensemble_size 1 \
-        --timesteps 500 \
+        --timesteps 1000 \
         --sample_type "ddpm" \
         --config_path ./src/configs/sample_config.toml \
         --num_workers 2 \
