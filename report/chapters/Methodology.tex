@@ -11,10 +11,24 @@ The original task of this thesis was to adjust the \gls{ddpm} architecture to ma
     \item The second order sampler used for the \gls{edm} is created to be much more robust to early stage errors than the first order Newton method used in the \gls{ddpm} setup. The Langevin churn operation makes sure to add noise in the later, less noisy, sampling steps, effectively outshining the compounding errors of the sampler. Along side, the second order Heun solver allows the model to take non-linear steps through the differential space. This effect helps mitigate overshooting and diminishes the step-wise error at the cost of additional computation.
 \end{enumerate}
 
-As all of these points refer to how samples are drawn from the two models it is adamant to investigate the noise schedule of either model. This will give insight into what behaviour is expected and how it is caused.
-For the \gls{ddpm} it is customary to use the cosine schedule \cite{better-ddpm}. As mentioned in \cref{sec:noise_schedule} and \cref{eq:sample} the value of $\alpha_t$ plays a large role in the sampling process. It determines the overall weight of the predicted noise against the added sampling noise. 
+As all of these points refer to how samples are drawn from the two models it is adamant to investigate the noise schedule of either model. This will give insight into what behaviour is expected and how it is caused. To visualise the weights of the \gls{ddpm} sampler look to \cref{fig:schedule}. In the figure you the evolution of $\alpha$, $\beta$, and $\bar{\alpha}$ is shown. The values are calculated using the cosine noise schedule, as that is the customary schedules for \gls{ddpm} \cite{better-ddpm}. Keep in mind that the figure show the forward evolution, meaning a higher timestep, $t$, means a higher noise. In the sampler, the process starts at $t=1000$ and ends at $t=0$.
 
-To show this effect one could investigate how a given sample travels from the noisy initialisation through the latent space of the model to the physical image space. It is desired that the predicted values of model converge during the sampling process. However, should the model become unstable the sampling values will diverge and the sample will be ruined.
+\begin{figure}
+    \centering
+    \includegraphics[width=1.\linewidth]{figures/method/noise_schedule.png}
+    \caption{Figure showing the evolution of the noise scheduling weights in the diffusion process using a cosine schedule.}
+    \label{fig:schedule}
+\end{figure}
+
+From a purely mathematical viewpoint we can analyse the expected outcome of a sample using \cref{eq:sample}. At the first sampling step: $t=T=1000$, the weighting values will be $\alpha_{T} \approx 0$, $\beta_{T} \approx 1$, and $\bar{\alpha}_{T} \approx 0$. From here, look at the sampling equation:
+\begin{equation}
+    X_{T-1}= \frac{1}{\sqrt{0}} \left( X_T - \frac{1}{\sqrt{1 - 0}} \right) + 1 \cdot Z
+\end{equation}
+The equation is inherently unstable, and out of the box it relies on the numerical instability of the $\alpha$ values to be well-defined. In reality $\alpha$ is never zero, but very close to. It causes the weighting of the error rate of the sample to diverge and become unstable.\\
+In modern literature, the values of $\alpha$ and $\beta$ are often clipped to avoid this issue \cite{better-ddpm}. This makes it possible to control the exploding weight but creates yet another trade-off. If $\alpha$ and $\beta$ are clipped, the SNR will never reach 1, meaning that the model will never see pure noise during training. As it will be forced to make predictions from pure noise during the sampling process, this is not an ideal solution. 
+In recent literature (e.g. \cite{better-ddpm}) the explosion issue is avoided by clipping the $\alpha$ and $\beta$, then assuming that the model can generalise to predict from pure noise, without a large discrepancy. As you will see below, this does not hold true in the setting proposed in this thesis.
+
+To show this effect we investigate how a sample travels from the noisy initialisation through the latent space of the model to the physical image space. It is desired that the predicted values of model converge during the sampling process. However, should the model become unstable the sampling values will diverge and the sample will be ruined.
 A small preliminary study shows both effects. 
 
 \begin{figure}[tb]
@@ -30,10 +44,7 @@ A small preliminary study shows both effects.
 
 In \cref{fig:variance_plot} we see the sampling process of the \gls{ddpm} and \gls{edm}. The difference in sampling strategies becomes clear. The figure shows how the early steps of the \gls{ddpm} sampling process has the mean value of the sample explode into extreme values, in this case as high 8330 (standardised values). The \gls{edm} uses the first 300 steps to place the mean values near their targets, then about 150 steps to bring down the internal deviation, and the last 100 steps to fine-tune values. While the final predicted values remain biased, they are significantly closer than the similar predictions from the \gls{ddpm}. 
 
-
-
-%% Spend more time describing the noise schedular and the alpha values to justify the behavior of the DDPM. We should also describe why this workd for normal images and not for climate data.
-
+In conclusion the \gls{edm} is the optimal choice for the application of this thesis, a similar conclusion to the one presented in \cite{thea}. While the exploding predictions might diminish as the model size, training time, and data size is increased the risk will remain. This will break the ability to validate the output of the model, as there is no telling if the given sample has diverged or not.
 
 \section{Conditioning}
 
