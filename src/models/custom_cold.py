@@ -5,8 +5,6 @@ from typing import Optional
 import torch
 import torch.nn.functional as F
 
-from src.callbacks.timer import log_time
-
 from src.models.base_diffusion import LitConditionalDiffusion
 
 
@@ -29,8 +27,7 @@ class LitCustomCold(LitConditionalDiffusion):
             beta_start=beta_start,
             beta_end=beta_end,
         )
-        
-    @log_time
+
     def training_step(self, batch, batch_idx):
         x0, condition = self._load_batch(batch)
 

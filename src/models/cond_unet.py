@@ -5,8 +5,6 @@ from typing import Optional
 import torch
 import torch.nn.functional as F
 
-from src.callbacks.timer import log_time
-
 from src.models.base_diffusion import LitConditionalDiffusion
 
 class LitConditionalUNet(LitConditionalDiffusion):
@@ -17,7 +15,6 @@ class LitConditionalUNet(LitConditionalDiffusion):
     ) -> None:
         super().__init__(backbone, hyperparameters)
 
-    @log_time
     def training_step(self, batch, batch_idx):
         x0, condition = self._load_batch(batch)
 

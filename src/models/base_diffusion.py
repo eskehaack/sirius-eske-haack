@@ -107,6 +107,7 @@ class LitConditionalDiffusion(LightningModule):
             sqrt_one_minus_alpha_bars = torch.sqrt(1.0 - alpha_bars).to(self.device)
 
             betas = torch.clamp(betas, min=1e-8, max=0.999).to(self.device)
+            alphas = torch.clamp(alphas, min=1e-8, max=0.999).to(self.device)
 
         elif schedule == "laplace":
             mu = 10.0
@@ -140,7 +141,7 @@ class LitConditionalDiffusion(LightningModule):
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
             optimizer, T_max=self.max_epochs, eta_min=self.lr * 0.5
         )
-        return [optimizer], [{"scheduler": scheduler, "interval": "step"}]
+        return [optimizer], [{"scheduler": scheduler, "interval": "epoch"}]
 
     @abstractmethod
     def training_step(self, batch, batch_idx):

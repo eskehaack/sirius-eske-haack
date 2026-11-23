@@ -73,6 +73,7 @@ def train_ddpm(run_id: str, config_path: str = "./src/configs/training_config.to
         logger=TensorBoardLogger(save_dir="logs", name=str(run_id)),
         log_every_n_steps=log_every_n_step,
         val_check_interval=checkpoint_every_n_steps,
+        enable_progress_bar=False,
     )
 
     print(f"Training on {torch.cuda.device_count()} devices.")

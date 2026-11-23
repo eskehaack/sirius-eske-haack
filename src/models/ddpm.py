@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 from typing import Optional
+from pathlib import Path
 
 import torch
 import torch.nn.functional as F
 
 import numpy as np
-
-from src.callbacks.timer import log_time
 
 from src.models.base_diffusion import LitConditionalDiffusion
 
@@ -34,7 +33,6 @@ class LitConditionalDDPM(LitConditionalDiffusion):
 
         self.cfg_dropout = hyperparameters.get("cfg_dropout", 0.1)
 
-    @log_time
     def training_step(self, batch, batch_idx):
         x0, condition = self._load_batch(batch)
 
@@ -172,8 +170,10 @@ class LitConditionalDDPM(LitConditionalDiffusion):
                 x = mean
 
         if save_metrics:
-            np.save("dist_test/means_black.npy", means)
-            np.save("dist_test/stds_black.npy", stds)
+            pth = Path("samples/23886318/datamodule_val/batch00000")
+            pth.mkdir(parents=True, exist_ok=True)
+            np.save(pth / "means.npy", means)
+            np.save(pth / "stds.npy", stds)
 
         return x
 

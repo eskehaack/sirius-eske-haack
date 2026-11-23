@@ -10,10 +10,7 @@ from pathlib import Path
 
 import torch
 import torch.nn as nn
-from torch.profiler import profile, record_function, ProfilerActivity
 import numpy as np
-
-from src.callbacks.timer import log_time
 
 from src.models.base_diffusion import LitConditionalDiffusion
 
@@ -137,7 +134,6 @@ class LitEDM(LitConditionalDiffusion):
         max_inv = s_max ** (1 / rho)
         return (max_inv + ramp * (min_inv - max_inv)) ** rho
 
-    @log_time
     def training_step(self, batch, batch_idx):
         x0, condition = self._load_batch(batch)
 
@@ -154,7 +150,7 @@ class LitEDM(LitConditionalDiffusion):
         x0, condition = self._load_batch(batch)
         loss = self._batch_loss((x0, condition))
 
-        self.log("val_loss", loss, prog_bar=False, on_epoch=True)
+        self.log("val_loss", loss.item(), prog_bar=False, on_epoch=True)
         return loss
 
     def cfg_forward(self, x_t: torch.Tensor, sigma: torch.Tensor, cond: torch.Tensor, cfg_scale: float) -> torch.Tensor:
@@ -259,8 +255,9 @@ class LitEDM(LitConditionalDiffusion):
             stds[i] = x.std(dim=(2, 3))
 
         if save_metrics:
-            Path("dist_test").mkdir(parents=True, exist_ok=True)
-            np.save("dist_test/edm_means.npy", means.detach().cpu().numpy())
-            np.save("dist_test/edm_stds.npy", stds.detach().cpu().numpy())
+            pth = Path("./samples/23454381/datamodule_val/batch00000")
+            pth.mkdir(parents=True, exist_ok=True)
+            np.save(pth / "means.npy", means.detach().cpu().numpy())
+            np.save(pth / "stds.npy", stds.detach().cpu().numpy())
 
         return x

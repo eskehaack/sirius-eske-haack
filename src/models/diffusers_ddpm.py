@@ -3,7 +3,6 @@
 # HuggingFace diffusers UNet2DModel, incorporating CFG, masked loss, attention,
 # multiple timesteps per sample, and a fixed cosine annealing scheduler.
 
-from src.callbacks.timer import log_time
 import torch
 import torch.nn.functional as F
 
@@ -86,8 +85,7 @@ class LitClimateDiffusion(LitConditionalDiffusion):
     # ------------------------------------------------------------------
     # Training
     # ------------------------------------------------------------------
-
-    @log_time
+    
     def training_step(self, batch, batch_idx):
         x0, condition = self._load_batch(batch)
         B = x0.shape[0]

@@ -12,8 +12,6 @@ import math
 import torch
 import torch.nn.functional as F
 
-from src.callbacks.timer import log_time
-
 from src.models.base_diffusion import LitConditionalDiffusion
 
 class LitColdDiffusion(LitConditionalDiffusion):
@@ -138,7 +136,6 @@ class LitColdDiffusion(LitConditionalDiffusion):
     # Training & validation
     # ------------------------------------------------------------------
 
-    @log_time
     def training_step(self, batch, batch_idx):
         r0, condition = self._load_batch(batch)
         x_lr = condition[:, :self.target_channels]
