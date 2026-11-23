@@ -5,6 +5,7 @@ from .cold_diffusion import LitColdDiffusion
 from .custom_cold import LitCustomCold
 from .diffusers_ddpm import LitClimateDiffusion
 from .lit_edm import LitEDM
+from .lit_edm2 import LitEDM2
 
 __all__ = [
     "ConditionalUNet",
@@ -14,6 +15,7 @@ __all__ = [
     "LitCustomCold",
     "LitClimateDiffusion",
     "LitEDM",
+    "LitEDM2",
 ]
 
 MODELREGISTRY = {
@@ -23,4 +25,5 @@ MODELREGISTRY = {
     "custom_cold": LitCustomCold,
     "diffusers_ddpm": LitClimateDiffusion,
     "edm": LitEDM,
+    "edm2": LitEDM2,
 }
