@@ -1,6 +1,6 @@
 [training]
 batch_size = 8
-max_epochs = 2
+max_epochs = 140
 num_workers = 6
 checkpoint_dir = "./checkpoints/"
 checkpoint_every_n_steps = 0
@@ -13,12 +13,13 @@ target_channels = 4
 condition_channels = 20
 base_channels = 32
 channel_mults = [1, 2, 4, 8]
-attention = true
+attention = false
 num_heads = 4
-diffusion_model = "edm"
+diffusion_model = "edm2"
 schedule = "cosine"
 timesteps = 1000
 image_size = [432, 432]
+dropout = 0.0
 
 [dates]
 train_blocks = [

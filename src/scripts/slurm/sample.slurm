@@ -7,7 +7,7 @@
 #SBATCH --cpus-per-task=1
 #SBATCH --gpus-per-task=1
 #SBATCH --mem=32G
-#SBATCH --time=00:15:00
+#SBATCH --time=00:30:00
 #SBATCH --output=./hpc_outputs/samples/%x-%j.out
 #SBATCH --error=./hpc_outputs/samples/%x-%j.err
 
@@ -56,13 +56,13 @@ srun --account=project_465002687 singularity exec \
     --bind /scratch/project_465002687 \
     "$SIF" \
     python -m src.sample \
-        --run_id "23641556" \
+        --run_id "23522809" \
         --checkpoint "last" \
         --batch_index 0 \
-        --ensemble_size 5 \
-        --timesteps 1000 \
+        --ensemble_size 1 \
+        --timesteps 500 \
         --sample_type "ddpm" \
         --config_path ./src/configs/sample_config.toml \
         --num_workers 2 \
         --cfg_scale 1.0 \
-	--s_churn 0.0
+        --s_churn 0.0

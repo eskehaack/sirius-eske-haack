@@ -2,10 +2,7 @@
 #SBATCH --job-name=ec_earth_sample_time_period
 #SBATCH --account=project_465002687
 #SBATCH --partition=small-g
-#SBATCH --nodes=1
-#SBATCH --ntasks-per-node=1
-#SBATCH --cpus-per-task=1
-#SBATCH --gpus-per-task=1
+#SBATCH --gpus=1
 #SBATCH --mem=32G
 #SBATCH --time=02:00:00
 #SBATCH --output=./hpc_outputs/samples/%x-%j.out
@@ -55,10 +52,10 @@ srun --account=project_465002687 singularity exec \
     --bind /scratch/project_465002687 \
     "$SIF" \
     python -m src.postprocessing.inference.sample_time_period \
-        --run_id "23522809" \
-        --period 1956-01-01 1956-03-31 \
+        --run_id "23454381" \
+        --period 1956-06-01 1956-08-31 \
         --batch_size 8 \
         --timesteps 1000 \
         --config_path ./src/configs/sample_config.toml \
         --num_workers 2 \
-        --cfg_scale 5.0
+        --cfg_scale 1.0

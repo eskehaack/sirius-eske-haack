@@ -7,7 +7,7 @@
 #SBATCH --cpus-per-task=7
 #SBATCH --gpus-per-node=1
 #SBATCH --mem=64G
-#SBATCH --time=01:00:00
+#SBATCH --time=10:00:00
 #SBATCH --output=./hpc_outputs/train/%x-%j.out
 #SBATCH --error=./hpc_outputs/train/%x-%j.err
 
@@ -56,17 +56,8 @@ srun rocm-smi
 cd "/scratch/project_465002687/sirius/"
 SIF="/scratch/project_465002687/ec_earth/containers/dockerv5.sif"
 CONFIG_PATH="./src/configs/sample_config.toml"
-ROCPROF_PATH="/opt/rocm/bin/rocprofv3"
 
-# srun --account=project_465002687 singularity exec \
-#     --bind /scratch/project_465002687 \
-#     --overlay /project/project_465003358/Exercises/AMD/Pytorch/deps.sqsh \
-#     "$SIF" \
-#     rocprofv3 --kernel-trace --memory-copy-trace --hip-trace --output-format pftrace -- \
-#     python -m src.train \
-#         --config_path "$CONFIG_PATH" \
-#         --run_id "$SLURM_JOB_ID"
-
+# --cpu-bind=mask_cpu:0xfe000000000000,0xfe00000000000000,0xfe0000,0xfe000000,0xfe,0xfe00,0xfe00000000,0xfe0000000000 \
 srun --account=project_465002687 singularity exec \
     --bind /scratch/project_465002687 \
     "$SIF" \
@@ -74,13 +65,13 @@ srun --account=project_465002687 singularity exec \
         --config_path "$CONFIG_PATH" \
         --run_id "$SLURM_JOB_ID"
 
-# srun --account=project_465002687 singularity exec \
-#     --bind /scratch/project_465002687 \
-#     "$SIF" \
-#     python -m src.sample \
-#         --config_path "$CONFIG_PATH" \
-#         --run_id "$SLURM_JOB_ID" \
-#         --ensemble_size 5 \
-#         --timesteps 1000 \
-#         --sample_type "ddpm" \
-#         --num_workers 2
+srun --account=project_465002687 singularity exec \
+    --bind /scratch/project_465002687 \
+    "$SIF" \
+    python -m src.sample \
+        --config_path "$CONFIG_PATH" \
+        --run_id "$SLURM_JOB_ID" \
+        --ensemble_size 5 \
+        --timesteps 1000 \
+        --sample_type "ddpm" \
+        --num_workers 2
