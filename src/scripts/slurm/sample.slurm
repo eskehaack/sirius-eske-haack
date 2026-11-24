@@ -60,7 +60,7 @@ srun --account=project_465002687 singularity exec \
         --checkpoint "last" \
         --batch_index 0 \
         --ensemble_size 1 \
-        --timesteps 1000 \
+        --timesteps 500 \
         --sample_type "ddpm" \
         --config_path ./src/configs/sample_config.toml \
         --num_workers 2 \
