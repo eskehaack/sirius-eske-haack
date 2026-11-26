@@ -51,8 +51,9 @@ class LitClimateDiffusion(LitConditionalDiffusion):
         self,
         backbone: str = "diffusers_unet",
         hyperparameters: dict = {},
+        static_features: torch.Tensor | None = None,
     ):
-        super().__init__(backbone, hyperparameters)
+        super().__init__(backbone, hyperparameters, static_features)
 
         # DDPM scheduler — used during training and DDPM inference
         self.ddpm_scheduler = DDPMScheduler(

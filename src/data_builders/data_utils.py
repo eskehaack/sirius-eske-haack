@@ -7,10 +7,13 @@ Generated on 2026-09-30 by Claude Sonnet 4.6 Low
 """
 
 import re
+import os
 from datetime import datetime
 from pathlib import Path
 
 import xarray as xr
+import pandas as pd
+import numpy as np
 
 
 # ---------------------------------------------------------------------------
@@ -173,6 +176,140 @@ def load_sample(
         "static":     static,
     }
 
+
+def load_variable(varname, path, mode, timesteps_per_chunk=None, vertical_dim_name="plev"):
+    if mode == 'mfdataset':
+        path, suffix = path.split("*", 1)
+        path = Path(path).expanduser().resolve()
+        assert path.exists(), f"Path does not exist: {path}"
+        files = sorted(path.rglob("*.nc"))  # Ensure the path is valid for globbing
+        ds = xr.open_mfdataset(
+            files,
+            combine="by_coords",
+            compat="no_conflicts",
+            data_vars="minimal",
+            coords="minimal",
+            chunks={"time": timesteps_per_chunk} if timesteps_per_chunk else "auto",
+            parallel=False,
+        )
+    else:
+        ds = xr.open_dataset(
+            path, 
+            chunks={"time": timesteps_per_chunk} if timesteps_per_chunk else "auto",
+        )
+        
+    da = ds[varname]
+
+    # Case 1: has vertical dimension
+    if vertical_dim_name in da.dims:
+        out = {}
+        levels = da.coords[vertical_dim_name].values
+
+        for lev in levels:
+            name = f"{varname}_{int(lev)}"
+            out[name] = da.sel({vertical_dim_name: lev}).drop_vars(vertical_dim_name)
+
+        return xr.Dataset(out)
+
+    # Case 2: single level variable
+    return da.to_dataset(name=varname)
+
+def merge_dataset(input_path, input_files, mode, timesteps_per_chunk=None, vertical_dim_name='plev'):
+    datasets = []
+    for var, file_path in input_files.items():
+        ds = load_variable(
+            var,
+            os.path.join(input_path, file_path),
+            mode,
+            timesteps_per_chunk=timesteps_per_chunk if timesteps_per_chunk else None,
+            vertical_dim_name=vertical_dim_name
+        )
+        datasets.append(ds)
+
+    if timesteps_per_chunk:
+        return xr.merge(
+            datasets,
+            compat="no_conflicts",
+            join="exact",
+        ).chunk({"time": timesteps_per_chunk})
+    else:
+        return xr.merge(
+            datasets,
+            compat="no_conflicts",
+            join="exact",
+        )
+
+def build_mask(time, blocks):
+    mask = np.zeros(len(time), dtype=bool)
+
+    for start, end in blocks:
+        start = pd.to_datetime(start)
+        end = pd.to_datetime(end)
+        mask |= (time >= start) & (time <= end)
+
+    return mask
+
+def build_indices(time, blocks):
+    mask = build_mask(time, blocks)
+    return np.flatnonzero(mask)
+
+def rechunk_dataset(ds, indices, timesteps_per_chunk=None):
+    da = ds.isel(time=indices)
+    da = da.to_array(dim="channel")
+
+    spatial_dims = [
+        dim for dim in da.dims
+        if dim not in ("time", "channel")
+    ]
+
+    da = da.transpose(
+        "time",
+        "channel",
+        *spatial_dims
+    )
+
+    chunks = {
+        "channel": -1,
+        "time": timesteps_per_chunk if timesteps_per_chunk else 'auto',
+    }
+
+    for dim in spatial_dims:
+        chunks[dim] = -1
+
+    return da.chunk(chunks)
+
+def _to_sharded_dataset(obj, indices, chunk_t, shard_t, dtype="float32", default_name="data"):
+    """Select valid timesteps, trim to whole chunks, stack fields into (time, channel, ...),
+    cast to dtype, and build zarr v3 chunk/shard encoding."""
+    indices = np.sort(np.asarray(indices))
+    n = (len(indices) // chunk_t) * chunk_t
+    if n < len(indices):
+        print(f"  dropping last {len(indices) - n} timesteps so every chunk is full")
+
+    if isinstance(obj, xr.DataArray):
+        da = obj if "channel" in obj.dims else obj.expand_dims(channel=[obj.name or default_name])
+    else:
+        fields = [v for v in obj.data_vars if "time" in obj[v].dims]   # skip grid-mapping etc.
+        da = obj[fields].to_array(dim="channel")
+
+    da = da.isel(time=indices[:n]).astype(dtype)
+    spatial_dims = [d for d in da.dims if d not in ("time", "channel")]
+    da = da.transpose("time", "channel", *spatial_dims)
+
+    # One dask chunk = one shard along time, full extent elsewhere
+    da = da.chunk({d: (shard_t if d == "time" else -1) for d in da.dims})
+
+    ds = da.to_dataset(name=default_name)            # back to a Dataset with a known name
+
+    for var in ds.variables.values():                # drop inherited v2 encoding
+        var.encoding = {}
+
+    shape = ds[default_name].shape                   # (time, channel, y, x)
+    encoding = {default_name: {
+        "chunks": (chunk_t, *shape[1:]),             # one read
+        "shards": (shard_t, *shape[1:]),             # one file
+    }}
+    return ds, encoding
 
 # ---------------------------------------------------------------------------
 # Example usage

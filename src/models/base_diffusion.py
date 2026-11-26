@@ -12,9 +12,10 @@ class LitConditionalDiffusion(LightningModule):
         self,
         backbone: str = "cond_unet",
         hyperparameters: dict = {},
+        static_features: torch.Tensor | None = None,
     ) -> None:
         super().__init__()
-        self.save_hyperparameters()
+        self.save_hyperparameters(ignore=["static_features"])
 
         self.target_channels = hyperparameters.get("target_channels", 4)
         self.condition_channels = hyperparameters.get("condition_channels", 20)
@@ -39,8 +40,9 @@ class LitConditionalDiffusion(LightningModule):
             slice(pad_top, pad_top + self.initial_target_shape[0]),    # rows 4:416
             slice(pad_left, pad_left + self.initial_target_shape[1]),  # cols 4:428
         )
-
-        self.static = None  # Allocation
+        static_features = static_features.reshape(1, -1, *static_features.shape[-2:])  # [1, 2, 412, 424]
+        static_features = F.pad(static_features, pad=self.pad_tuple, mode="constant", value=0.0)
+        self.register_buffer("static_features", static_features)
 
     def q_sample(
         self, x0: torch.Tensor, t: torch.Tensor, noise: torch.Tensor
@@ -55,7 +57,7 @@ class LitConditionalDiffusion(LightningModule):
         return (x_t - sqrt_omab * noise_pred) / sqrt_ab
 
     def _load_batch(self, batch):
-        x, y, static, _ = batch
+        x, y = batch
         device = self.device
         dtype = torch.float32
 
@@ -72,12 +74,7 @@ class LitConditionalDiffusion(LightningModule):
         )
         condition = F.pad(condition, pad=self.pad_tuple, mode="constant", value=0.0)  # [B, 18, *training_image_size]
 
-        # Static: already 412x424, so only pad. Cache once (assumes static is identical across samples).
-        if self.static is None:
-            static_single = static[:1].to(device, dtype)  # [1, 2, 412, 424]
-            self.static = F.pad(static_single, pad=self.pad_tuple, mode="constant", value=0.0)
-
-        static_b = self.static.expand(condition.size(0), -1, -1, -1)  # [B, 2, *training_image_size]
+        static_b = self.static_features.expand(condition.size(0), -1, -1, -1)  # [B, 2, *training_image_size]
         condition = torch.cat([condition, static_b], dim=1)           # [B, 20, *training_image_size]
 
         return x0, condition

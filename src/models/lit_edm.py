@@ -104,8 +104,9 @@ class LitEDM(LitConditionalDiffusion):
         self,
         backbone: str = "super_unet",
         hyperparameters: dict = {},
+        static_features: torch.Tensor | None = None,
     ):
-        super().__init__(backbone, hyperparameters)
+        super().__init__(backbone, hyperparameters, static_features)
 
         self.sigma_min = hyperparameters.get("sigma_min", 0.002)
         self.sigma_max = hyperparameters.get("sigma_max", 160.0)
@@ -143,14 +144,36 @@ class LitEDM(LitConditionalDiffusion):
 
         loss = self._batch_loss((x0, condition))
 
-        self.log("train_loss", loss.item(), prog_bar=False, on_step=True, on_epoch=True)
+        self.log("train_loss", loss.item(), prog_bar=False, on_step=True, on_epoch=True, sync_dist=True)
         return loss
 
     def validation_step(self, batch, batch_idx):
         x0, condition = self._load_batch(batch)
         loss = self._batch_loss((x0, condition))
 
-        self.log("val_loss", loss.item(), prog_bar=False, on_epoch=True)
+        self.log("val_loss", loss.item(), prog_bar=False, on_epoch=True, sync_dist=True)
+        return loss
+
+    def test_step(self, batch, batch_idx):
+        x0, condition = self._load_batch(batch)
+
+        hparams = {}
+        predictions = self.sample(cond=condition, num_steps=self.timesteps, hparams=hparams)
+
+        loss = (predictions - x0).pow(2).mean(dim=(1, 2, 3)).mean()  # mean over batch
+
+        save_dir = Path(f"./samples/{self.hparams.get('hyperparameters', {}).get('run_id', 'XXXXXX')}/datamodule_test/batch{batch_idx:05d}")
+        save_dir.mkdir(parents=True, exist_ok=True)
+
+        for i, (pred, true) in enumerate(zip(predictions, x0)):
+            np.save(save_dir / f"pred_{i:03d}.npy", pred.detach().cpu().numpy())
+            np.save(save_dir / f"true_{i:03d}.npy", true.detach().cpu().numpy())
+
+        self.log("test_loss", loss.item(), prog_bar=False, on_epoch=True, sync_dist=True)
+
+        if self.hparams.get('hyperparameters', None) is None:
+            print(self.hparams)
+
         return loss
 
     def cfg_forward(self, x_t: torch.Tensor, sigma: torch.Tensor, cond: torch.Tensor, cfg_scale: float) -> torch.Tensor:

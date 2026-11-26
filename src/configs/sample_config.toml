@@ -1,7 +1,7 @@
 [training]
-batch_size = 8
-max_epochs = 140
-num_workers = 6
+batch_size = 1
+max_epochs = 2
+num_workers = 7
 checkpoint_dir = "./checkpoints/"
 checkpoint_every_n_steps = 0
 log_every_n_step = 10
@@ -15,7 +15,7 @@ base_channels = 32
 channel_mults = [1, 2, 4, 8]
 attention = false
 num_heads = 4
-diffusion_model = "edm2"
+diffusion_model = "edm"
 schedule = "cosine"
 timesteps = 1000
 image_size = [432, 432]
@@ -31,20 +31,25 @@ val_blocks = [
   ["1956-01-01", "1956-12-31"],
   ["1966-01-01", "1966-12-31"],
 ]
+
+inference_blocks = [
+  ["1970-01-01", "1970-12-14"],
+  ["1970-07-01", "1970-07-14"],
+]
 daily_frequency = true
 
 [preprocessing]
-timesteps_per_chunk = 512
+timesteps_per_chunk = 8
 temperature_constraints = false
 precipitation_scaling = 86400
 precipitation_transform = false
 residualize_targets = true
 wet_day_threshold = 0.5
 normalization = 'global'
-normalization_stats_path = '/scratch/project_465002687/ec_earth/sample_big/normalization_stats.nc'
-predictors_output = '/scratch/project_465002687/ec_earth/sample_big/predictors.zarr'
-targets_output = '/scratch/project_465002687/ec_earth/sample_big/targets.zarr'
-static_output = '/scratch/project_465002687/ec_earth/sample_big/static.zarr'
+normalization_stats_path = '/scratch/project_465002687/ec_earth/sample_multi/normalization_stats.nc'
+predictors_output = '/scratch/project_465002687/ec_earth/sample_multi/predictors.zarr'
+targets_output = '/scratch/project_465002687/ec_earth/sample_multi/targets.zarr'
+static_output = '/scratch/project_465002687/ec_earth/sample_multi/static.zarr'
 
 [predictors]
 vertical_dim_name = "plev"

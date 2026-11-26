@@ -7,7 +7,7 @@
 #SBATCH --cpus-per-task=7
 #SBATCH --gpus-per-node=1
 #SBATCH --mem=64G
-#SBATCH --time=10:00:00
+#SBATCH --time=04:00:00
 #SBATCH --output=./hpc_outputs/train/%x-%j.out
 #SBATCH --error=./hpc_outputs/train/%x-%j.err
 
@@ -64,14 +64,3 @@ srun --account=project_465002687 singularity exec \
     python -m src.train \
         --config_path "$CONFIG_PATH" \
         --run_id "$SLURM_JOB_ID"
-
-srun --account=project_465002687 singularity exec \
-    --bind /scratch/project_465002687 \
-    "$SIF" \
-    python -m src.sample \
-        --config_path "$CONFIG_PATH" \
-        --run_id "$SLURM_JOB_ID" \
-        --ensemble_size 5 \
-        --timesteps 1000 \
-        --sample_type "ddpm" \
-        --num_workers 2

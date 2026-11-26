@@ -1,8 +1,10 @@
 import argparse
 from pathlib import Path
+import os
 
 import torch
 import lightning.pytorch as pl
+from lightning.pytorch.utilities import rank_zero_info
 from lightning.pytorch.callbacks import ModelCheckpoint, LearningRateMonitor
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 from lightning.pytorch.loggers import TensorBoardLogger
@@ -14,7 +16,8 @@ from src.models import MODELREGISTRY
 
 def train_ddpm(run_id: str, config_path: str = "./src/configs/training_config.toml"):
 
-    pl.seed_everything(42, workers=True)
+    seed = 42
+    pl.seed_everything(seed, workers=True)
 
     config_path = Path(config_path)
     if not config_path.exists():
@@ -31,23 +34,29 @@ def train_ddpm(run_id: str, config_path: str = "./src/configs/training_config.to
 
     hyperparameters: dict = parse_config("hyperparams", config_path)
     if "max_epochs" in hyperparameters and hyperparameters["max_epochs"] != max_epochs:
-        print(f"Warning: Overriding max_epochs in hyperparameters ({hyperparameters['max_epochs']}) with value from config ({max_epochs}).")
+        rank_zero_info(f"Warning: Overriding max_epochs in hyperparameters ({hyperparameters['max_epochs']}) with value from config ({max_epochs}).")
     hyperparameters["max_epochs"] = max_epochs
+    hyperparameters["run_id"] = run_id
 
     datamodule = DataModule(
         batch_size=batch_size,
         num_workers=num_workers,
         config_path=config_path,
+        seed=seed,
     )
+    datamodule.setup()
 
+    static_features = datamodule.train_ds.static_features
     model = MODELREGISTRY[hyperparameters["diffusion_model"]](
         backbone=hyperparameters["backbone"],
-        hyperparameters=hyperparameters
+        hyperparameters=hyperparameters,
+        static_features=static_features
     )
 
     model.save_hyperparameters(config)
+    parallel = int(os.environ.get("WORLD_SIZE", 1)) > 1
 
-    print("Checkpoint dir:" + str((Path(checkpoint_dir)).resolve()))
+    rank_zero_info("Checkpoint dir:" + str((Path(checkpoint_dir)).resolve()))
     checkpoint_callback = ModelCheckpoint(
         dirpath=checkpoint_dir,
         filename="ddpm-{epoch:03d}-{val_loss:.4f}",
@@ -55,29 +64,31 @@ def train_ddpm(run_id: str, config_path: str = "./src/configs/training_config.to
         mode="min",
         save_top_k=3,
         save_last=True,
-        every_n_train_steps=checkpoint_every_n_steps
     )
 
     trainer = pl.Trainer(
+        strategy='ddp' if parallel else "auto",
+        accelerator="gpu",
+        devices="auto",
+        precision="bf16-mixed",
         profiler="simple",
         max_epochs=max_epochs,
-        accelerator="auto",
-        devices="auto",
-        precision="16-mixed",
-        accumulate_grad_batches=4,
+        accumulate_grad_batches=1 if parallel else 4,
         callbacks=[
             checkpoint_callback,
             LearningRateMonitor(logging_interval="step"),
-            EarlyStopping(monitor="val_loss", mode="min", min_delta=0.0, patience=8)
+            EarlyStopping(monitor="val_loss", mode="min", min_delta=0.0, patience=8, check_on_train_epoch_end=False)
         ],
         logger=TensorBoardLogger(save_dir="logs", name=str(run_id)),
         log_every_n_steps=log_every_n_step,
-        val_check_interval=checkpoint_every_n_steps,
         enable_progress_bar=False,
     )
 
-    print(f"Training on {torch.cuda.device_count()} devices.")
+    rank_zero_info(f"Training on {torch.cuda.device_count()} devices.")
     trainer.fit(model, datamodule=datamodule)
+
+    rank_zero_info(f"Training completed. Best model saved at: {checkpoint_callback.best_model_path}")
+    trainer.test(model, datamodule=datamodule)
     return model, trainer
 
 
@@ -102,14 +113,6 @@ def parse_args():
 
 
 if __name__ == "__main__":
-    print("Torch Version:", torch.__version__)
-    print("Torch CUDA Available:", torch.cuda.is_available())
-    print("Torch TPU Available:", torch.backends.mps.is_available())
-    print("Torch CUDA Device:", torch.cuda.get_device_name(0))
-    print("Torch HIP Version:", torch.version.hip)
-
-    print("Tensorboard log dir:" + str((Path("logs") / "conditional_ddpm").resolve()))
-
     torch.set_float32_matmul_precision("medium")
 
     args = parse_args()

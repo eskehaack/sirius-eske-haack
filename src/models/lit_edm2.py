@@ -361,8 +361,9 @@ class LitEDM2(LitConditionalDiffusion):
         self,
         backbone: str = "super_unet",
         hyperparameters: dict = {},
+        static_features: torch.Tensor | None = None,
     ):
-        super().__init__(backbone, hyperparameters)
+        super().__init__(backbone, hyperparameters, static_features)
 
         self.sigma_min = hyperparameters.get("sigma_min", 0.002)
         self.sigma_max = hyperparameters.get("sigma_max", 160.0)

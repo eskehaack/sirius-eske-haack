@@ -12,8 +12,9 @@ class LitConditionalUNet(LitConditionalDiffusion):
         self,
         backbone: str = "cond_unet",
         hyperparameters: dict = {},
+        static_features: torch.Tensor | None = None,
     ) -> None:
-        super().__init__(backbone, hyperparameters)
+        super().__init__(backbone, hyperparameters, static_features)
 
     def training_step(self, batch, batch_idx):
         x0, condition = self._load_batch(batch)

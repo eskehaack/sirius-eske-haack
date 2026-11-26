@@ -3,20 +3,16 @@ The original author of this code is: Mikhail Ivanov (https://github.com/mikhail-
 The code has been modified by the current author to suit specific needs, under the approval of Mikhail Ivanov.
 """
 
-
 import os
-import glob
 from pathlib import Path
-import math
 import toml
-import zarr
 import torch
 import numpy as np
 import pandas as pd
 import xarray as xr
 from torch.utils.data import Dataset
-from torch.utils.data import IterableDataset
-import torch.nn.functional as F
+
+from src.data_builders import data_utils as d_utils
 
 class ClimateDataBuilder:
     def __init__(
@@ -43,18 +39,17 @@ class ClimateDataBuilder:
         self.infer_idx = None
         self.stats = None
 
-    def load_predictors(self):
+    def load_set(self, config):
         datasets = []
-        #timesteps_per_chunk = self.preprocessing_config.get("timesteps_per_chunk")
         timesteps_per_chunk = 'auto' # Seems to be optimal for preprocessing
-        vertical_dim_name = self.predictor_config["vertical_dim_name"]
-        for source_name, source_config in self.predictor_config["source"].items():
+        vertical_dim_name = config.get("vertical_dim_name", "plev")
+        for source_name, source_config in config["source"].items():
             for scenario_name, scenario_config in source_config["scenario"].items():
                 for member_name, member_config in scenario_config["member"].items():
                     basepath = member_config["basepath"]
                     files = member_config["files"]
                     mode = member_config["mode"]
-                    ds = merge_dataset(
+                    ds = d_utils.merge_dataset(
                         basepath, 
                         files, 
                         mode,
@@ -67,57 +62,15 @@ class ClimateDataBuilder:
                     datasets.append(ds)
                     
         return datasets
+
+    def load_predictors(self):
+        return self.load_set(self.predictor_config)
     
     def load_regridded_predictors(self):
-        datasets = []
-        #timesteps_per_chunk = self.preprocessing_config.get("timesteps_per_chunk")
-        timesteps_per_chunk = 'auto' # Seems to be optimal for preprocessing
-        vertical_dim_name = self.regridded_predictor_config["vertical_dim_name"]
-        for source_name, source_config in self.regridded_predictor_config["source"].items():
-            for scenario_name, scenario_config in source_config["scenario"].items():
-                for member_name, member_config in scenario_config["member"].items():
-                    basepath = member_config["basepath"]
-                    files = member_config["files"]
-                    mode = member_config["mode"]
-                    ds = merge_dataset(
-                        basepath, 
-                        files, 
-                        mode,
-                        timesteps_per_chunk,
-                        vertical_dim_name
-                    )
-                    realization_id = f"{source_name}|{scenario_name}|{member_name}"
-                    ds = ds.expand_dims(realization=[realization_id])
-                    ds = self._normalize_time(ds)
-                    datasets.append(ds)
-                    
-        return datasets
+        return self.load_set(self.regridded_predictor_config)
 
     def load_targets(self):
-        if self.target_config is None:
-            return None
-
-        datasets = []
-        #timesteps_per_chunk = self.preprocessing_config.get("timesteps_per_chunk")
-        timesteps_per_chunk = 'auto' # Seems to be optimal for preprocessing
-        for source_name, source_config in self.target_config["source"].items():
-            for scenario_name, scenario_config in source_config["scenario"].items():
-                for member_name, member_config in scenario_config["member"].items():
-                    basepath = member_config["basepath"]
-                    files = member_config["files"]
-                    mode = member_config["mode"]
-                    ds = merge_dataset(
-                        basepath, 
-                        files, 
-                        mode,
-                        timesteps_per_chunk,
-                    )
-                    realization_id = f"{source_name}|{scenario_name}|{member_name}"
-                    ds = ds.expand_dims(realization=[realization_id])
-                    ds = self._normalize_time(ds)
-                    datasets.append(ds)
-                    
-        return datasets
+        return self.load_set(self.target_config)
 
     def load_static_features(self):
         if self.static_features_config is None:
@@ -125,7 +78,7 @@ class ClimateDataBuilder:
 
         mode = self.static_features_config["mode"]
 
-        ds = merge_dataset(
+        ds = d_utils.merge_dataset(
             self.static_features_config["basepath"],
             self.static_features_config["files"],
             mode,
@@ -152,42 +105,6 @@ class ClimateDataBuilder:
             raise ValueError("Time mismatch after alignment")
 
         return predictors, targets
-
-    def _apply_temperature_constraints(self):
-        if self.preprocessing_config["temperature_constraints"]:
-            temperatures_vars = ['tas', 'tasmin', 'tasmax']
-            for var in temperatures_vars:
-                assert var in self.predictors.data_vars, f"{var} is missing in the predictor set"
-                if self.targets:
-                    assert var in self.targets.data_vars, f"{var} is missing in the target set"
-                    
-            self.predictors['tas_diff_min'] = self.predictors['tas'] - self.predictors['tasmin']
-            self.predictors['tas_diff_max'] = self.predictors['tasmax'] - self.predictors['tas']
-            self.predictors = self.predictors.drop_vars(['tas', 'tasmax'])
-
-            if self.targets:
-                self.targets['tas_diff_min'] = self.targets['tas'] - self.targets['tasmin']
-                self.targets['tas_diff_max'] = self.targets['tasmax'] - self.targets['tas']
-                self.targets = self.targets.drop_vars(['tas', 'tasmax'])
-        else:
-            print(f"No temperature constraints applied.")
-
-    def _precipitation_preprocessing(self):
-        if self.preprocessing_config["precipitation_transform"] == 'log1p':
-            assert 'pr' in self.predictors, 'pr variable is missing in the predictor set'
-            pr_scaling = float(self.preprocessing_config["precipitation_scaling"])
-            wet_day_threshold = float(self.preprocessing_config["wet_day_threshold"])
-            self.predictors['pr_log_mm_day'] = np.log1p(self.predictors['pr'] * pr_scaling)
-            self.predictors = self.predictors.drop_vars(['pr'])
-            if self.targets:
-                assert 'pr' in self.targets, 'pr variable is missing in the target set'
-                self.targets['pr'] *= pr_scaling
-                if wet_day_threshold > 0:
-                    self.targets['pr_mask'] = self.targets['pr'] >= wet_day_threshold
-                self.targets['pr_log_mm_day'] = np.log1p(self.targets['pr'])
-                self.targets = self.targets.drop_vars(['pr'])
-        else:
-            print(f'No precipitation preprocessing applied.')
 
     def _residualize_targets(self):
         if self.targets is None:
@@ -281,8 +198,6 @@ class ClimateDataBuilder:
             )
         
     def preprocessing(self):
-        self._apply_temperature_constraints()
-        self._precipitation_preprocessing()
         self._residualize_targets()
         self._check_static_alignment()
         self._scale_static_features()
@@ -326,8 +241,8 @@ class ClimateDataBuilder:
         self.targets = targets_combined
 
         print(f"Building the training indices...")
-        train_idx = build_indices(
-            self.predictors,
+        train_idx = d_utils.build_indices(
+            pd.to_datetime(self.predictors.time.values),
             self.date_config["train_blocks"]
         )
         self.train_idx = train_idx
@@ -337,69 +252,51 @@ class ClimateDataBuilder:
         print("min", train_idx.min())
         print("blocks", self.date_config["train_blocks"])
 
-        print(f"Building the target indices...")
-        val_idx = build_indices(
-            self.predictors,
+        print(f"Building the validation indices...")
+        val_idx = d_utils.build_indices(
+            pd.to_datetime(self.predictors.time.values),
             self.date_config["val_blocks"]
         )
         self.val_idx = val_idx
 
-        print(f"Preprocessing the data...")
-        self.preprocessing()
-
-    def build_inference_set(self):
-        print(f"Loading predictors...")
-        predictors_list = self.load_predictors()
-        print(f"Loading static features...")
-        static_features = self.load_static_features()
-        self.static_features = static_features
-
-        print(f"Concatenating the predictors...")
-        predictors_combined = xr.concat(
-            [predictors.squeeze("realization", drop=True) for predictors in predictors_list],
-            dim='time'
-        )
-        self.predictors = predictors_combined
-
         print(f"Building the inference indices...")
-        infer_idx = build_indices(
-            self.predictors,
+        infer_idx = d_utils.build_indices(
+            pd.to_datetime(self.predictors.time.values),
             self.date_config["inference_blocks"]
         )
         self.infer_idx = infer_idx
-        
+
         print(f"Preprocessing the data...")
         self.preprocessing()
 
     def write_preprocessed_data(self, indices):
-        predictors_output = self.preprocessing_config.get("predictors_output")
-        targets_output = self.preprocessing_config.get("targets_output")
-        static_output = self.preprocessing_config.get("static_output")
+        cfg = self.preprocessing_config
+        predictors_output = cfg.get("predictors_output")
+        targets_output = cfg.get("targets_output")
+        static_output = cfg.get("static_output")
 
-        timesteps_per_chunk = self.preprocessing_config.get("timesteps_per_chunk")
-        
+        chunk_t = cfg.get("timesteps_per_chunk", 8)
+        shard_t = cfg.get("timesteps_per_shard", 256)
+        if shard_t % chunk_t != 0:
+            raise ValueError(f"timesteps_per_shard ({shard_t}) must be a multiple of "
+                             f"timesteps_per_chunk ({chunk_t})")
+
         if static_output and not os.path.isdir(static_output):
-            print(f"Writing static data {static_output}")
-            self.static_features.to_zarr(static_output, zarr_format=2, mode='w')
-            
-        if predictors_output and not os.path.isdir(predictors_output):
-            print(f"Writing predictors data to {predictors_output}")
-            predictors = rechunk_dataset(self.predictors, indices, timesteps_per_chunk)    
-            predictors.to_zarr(
-                predictors_output,
-                zarr_format=2,
-                mode="w"
-            )
-            
-        if self.targets is not None and targets_output and not os.path.isdir(targets_output):
-            print(f"Writing targets data to {targets_output}")
-            targets = rechunk_dataset(self.targets, indices, timesteps_per_chunk)
-            
-            targets.to_zarr(
-                targets_output,
-                zarr_format=2,
-                mode="w"
-            )
+            print(f"Writing static data to {static_output}")
+            static = self.static_features
+            if isinstance(static, xr.DataArray):
+                static = static.to_dataset(name=static.name or "data")
+            for var in static.variables.values():
+                var.encoding = {}
+            static.to_zarr(static_output, zarr_format=3, mode="w", consolidated=False)
+
+        for label, obj, out in (("predictors", self.predictors, predictors_output),
+                                ("targets", self.targets, targets_output)):
+            if obj is None or not out or os.path.isdir(out):
+                continue
+            print(f"Writing {label} to {out} (chunk={chunk_t}, shard={shard_t} timesteps)")
+            ds, encoding = d_utils._to_sharded_dataset(obj, indices, chunk_t, shard_t)
+            ds.to_zarr(out, zarr_format=3, mode="w", encoding=encoding, consolidated=False)
 
 class TrainingDataset(Dataset):
     def __init__(self, predictors_path, static_features_path, targets_path, blocks):
@@ -423,7 +320,7 @@ class TrainingDataset(Dataset):
         )
         self.target_grid = tuple(static_features.sizes.values())
 
-        indices = build_indices(pd.to_datetime(self.predictors.time.values), blocks)
+        indices = d_utils.build_indices(pd.to_datetime(self.predictors.time.values), blocks)
         self.indices = np.array(indices)
         self.length = len(self.indices)
 
@@ -446,215 +343,6 @@ class TrainingDataset(Dataset):
         return x, y, self.static_features, idx
 
 
-class ChunkedZarrDataset(IterableDataset):
-    def __init__(self, predictors_path, static_features_path, targets_path, blocks, shuffle=True):
-        """
-        Generated by: Claude Sonnet 4.6
-        Rebuilds TrainingDataset as a chunk-aware IterableDataset using zarr directly,
-        loading one large time-chunk at a time to avoid repeated partial reads.
-
-        predictors_path     : path to predictors zarr store
-        targets_path        : path to targets zarr store
-        static_features_path: path to static features zarr store (loaded once)
-        blocks              : list of [start_date, end_date] pairs defining valid samples
-        chunk_size          : number of timesteps per zarr chunk
-        shuffle             : shuffle samples within each chunk
-        """
-        super().__init__()
-        self.predictors_path = predictors_path
-        self.targets_path = targets_path
-        self.shuffle = shuffle
-        self.target_variables = None
-
-        # Read time coordinate once to build indices — cheap, just 4383 floats
-        self.z_pred = zarr.open(predictors_path, mode="r")
-        time = pd.to_datetime(self.z_pred["time"][:], unit="D", origin=pd.Timestamp("1850-01-01"))
-        self.all_indices = build_indices(time, blocks)  # your existing logic
-
-        # Group indices by which chunk they fall into
-        self.chunk_size = self.z_pred["__xarray_dataarray_variable__"].chunks[0]
-        chunk_ids = self.all_indices // self.chunk_size
-        self.chunks = {}  # chunk_id -> array of local (within-chunk) indices
-        for global_idx, chunk_id in zip(self.all_indices, chunk_ids):
-            local_idx = global_idx % self.chunk_size
-            self.chunks.setdefault(int(chunk_id), []).append(local_idx)
-        self.chunk_ids = sorted(self.chunks.keys())
-
-        # Static features: small, load once into memory
-        z_static = zarr.open(static_features_path, mode="r")
-        static_array = np.stack([z_static[var][:].astype(np.float32)
-                                 for var in z_static.keys()
-                                 if var not in ("lat", "lon", "rlat", "rlon")])
-        self.static_features = torch.from_numpy(static_array)
-
-        self.length = len(self.all_indices)
-
-    def __len__(self):
-        return self.length
-
-    def __getitem__(self, idx):
-        # idx here is a position in self.all_indices, not a timestep
-        global_t = self.all_indices[idx]
-
-        z_pred = zarr.open(self.predictors_path, mode="r")
-        z_targ = zarr.open(self.targets_path, mode="r")
-
-        x = torch.from_numpy(
-            z_pred["__xarray_dataarray_variable__"][global_t].astype(np.float32)
-        )
-        y_raw = torch.from_numpy(
-            z_targ["__xarray_dataarray_variable__"][global_t]
-        )
-        y = {var: y_raw[i] for i, var in enumerate(self.target_variables)}
-
-        return x, y, self.static_features, idx
-
-    def __iter__(self):
-        worker_info = torch.utils.data.get_worker_info()
-
-        # Split chunks across workers — each worker owns a disjoint set of chunks
-        chunk_ids = self.chunk_ids
-        if worker_info is not None:
-            per_worker = math.ceil(len(chunk_ids) / worker_info.num_workers)
-            start = worker_info.id * per_worker
-            chunk_ids = chunk_ids[start: start + per_worker]
-
-        z_pred = zarr.open(self.predictors_path, mode="r")
-        z_targ = zarr.open(self.targets_path, mode="r")
-        if self.target_variables is None:
-            self.target_variables = z_targ['channel'][:].tolist()
-
-        pred_arr = z_pred["__xarray_dataarray_variable__"]
-        targ_arr = z_targ["__xarray_dataarray_variable__"]
-
-        for chunk_id in chunk_ids:
-            local_indices = np.array(self.chunks[chunk_id])
-            t_start = chunk_id * self.chunk_size
-            t_end = min(t_start + self.chunk_size, pred_arr.shape[0])
-
-            # Load entire chunk into RAM once — shape (chunk_size, channels, h, w)
-            pred_chunk = torch.from_numpy(
-                pred_arr[t_start:t_end].astype(np.float32)
-            )  # (chunk_size, 18, 59, 131)
-            targ_chunk = torch.from_numpy(
-                targ_arr[t_start:t_end]  # already float32
-            )  # (chunk_size, 4, 412, 424)
-
-            if self.shuffle:
-                local_indices = local_indices[np.random.permutation(len(local_indices))]
-
-            for local_t in local_indices:
-                global_t = t_start + local_t
-                x = pred_chunk[local_t]       # (18, 59, 131)
-                y_raw = targ_chunk[local_t]   # (4, 412, 424)
-
-                # Reconstruct the variable dict your model expects
-                y = {var: y_raw[i] for i, var in enumerate(self.target_variables)}
-
-                yield x, y, self.static_features, global_t
-
-
-def load_variable(varname, path, mode, timesteps_per_chunk=None, vertical_dim_name="plev"):
-    if mode == 'mfdataset':
-        path, suffix = path.split("*", 1)
-        path = Path(path).expanduser().resolve()
-        assert path.exists(), f"Path does not exist: {path}"
-        files = sorted(path.rglob("*.nc"))  # Ensure the path is valid for globbing
-        ds = xr.open_mfdataset(
-            files,
-            combine="by_coords",
-            compat="no_conflicts",
-            data_vars="minimal",
-            coords="minimal",
-            chunks={"time": timesteps_per_chunk} if timesteps_per_chunk else "auto",
-            parallel=False,
-        )
-    else:
-        ds = xr.open_dataset(
-            path, 
-            chunks={"time": timesteps_per_chunk} if timesteps_per_chunk else "auto",
-        )
-        
-    da = ds[varname]
-
-    # Case 1: has vertical dimension
-    if vertical_dim_name in da.dims:
-        out = {}
-        levels = da.coords[vertical_dim_name].values
-
-        for lev in levels:
-            name = f"{varname}_{int(lev)}"
-            out[name] = da.sel({vertical_dim_name: lev}).drop_vars(vertical_dim_name)
-
-        return xr.Dataset(out)
-
-    # Case 2: single level variable
-    return da.to_dataset(name=varname)
-
-def merge_dataset(input_path, input_files, mode, timesteps_per_chunk=None, vertical_dim_name='plev'):
-    datasets = []
-    for var, file_path in input_files.items():
-        ds = load_variable(
-            var,
-            os.path.join(input_path, file_path),
-            mode,
-            timesteps_per_chunk=timesteps_per_chunk if timesteps_per_chunk else None,
-            vertical_dim_name=vertical_dim_name
-        )
-        datasets.append(ds)
-
-    if timesteps_per_chunk:
-        return xr.merge(
-            datasets,
-            compat="no_conflicts",
-            join="exact",
-        ).chunk({"time": timesteps_per_chunk})
-    else:
-        return xr.merge(
-            datasets,
-            compat="no_conflicts",
-            join="exact",
-        )
-
-def build_mask(time, blocks):
-    mask = np.zeros(len(time), dtype=bool)
-
-    for start, end in blocks:
-        start = pd.to_datetime(start)
-        end = pd.to_datetime(end)
-        mask |= (time >= start) & (time <= end)
-
-    return mask
-
-def build_indices(time, blocks):
-    mask = build_mask(time, blocks)
-    return np.flatnonzero(mask)
-
-def rechunk_dataset(ds, indices, timesteps_per_chunk=None):
-    da = ds.isel(time=indices)
-    da = da.to_array(dim="channel")
-
-    spatial_dims = [
-        dim for dim in da.dims
-        if dim not in ("time", "channel")
-    ]
-
-    da = da.transpose(
-        "time",
-        "channel",
-        *spatial_dims
-    )
-
-    chunks = {
-        "channel": -1,
-        "time": timesteps_per_chunk if timesteps_per_chunk else 'auto',
-    }
-
-    for dim in spatial_dims:
-        chunks[dim] = -1
-
-    return da.chunk(chunks)    
-
 def parse_config(config_keyword="input", config_path="config.toml"):
     """Parses and returns TOML input config.
     
@@ -673,19 +361,3 @@ def parse_config(config_keyword="input", config_path="config.toml"):
         print(f"Error: Configuration file '{config_path}' not found.")
     except toml.TomlDecodeError:
         print(f"Error: Failed to parse the configuration file '{config_path}'. Ensure it's a valid TOML file.")
-
-def toml_dump(output_path, config_path="config.toml"):
-    if not os.path.isfile(config_path):
-        raise FileNotFoundError(f"The source file does not exist: {config_path}")
-    
-    if not os.path.isdir(output_path):
-        raise NotADirectoryError(f"The destination directory does not exist: {output_path}")
-    
-    filename = os.path.basename(config_path)
-    destination_path = os.path.join(output_path, filename)
-
-    # Load and re-serialize TOML
-    print(f"Saving a copy of the config file to {destination_path}...")
-    data = toml.load(config_path)
-    with open(destination_path, 'w', encoding='utf-8') as dst_file:
-        toml.dump(data, dst_file)

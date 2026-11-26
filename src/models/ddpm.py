@@ -16,8 +16,9 @@ class LitConditionalDDPM(LitConditionalDiffusion):
         self,
         backbone: str = "cond_unet",
         hyperparameters: dict = {},
+        static_features: torch.Tensor | None = None,
     ):
-        super().__init__(backbone, hyperparameters)
+        super().__init__(backbone, hyperparameters, static_features)
 
         schedule = hyperparameters.get("schedule", "linear")
         timesteps = hyperparameters.get("timesteps", 1000)

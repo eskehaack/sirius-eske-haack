@@ -21,7 +21,6 @@ data_builder = ClimateDataBuilder(
 )
 
 data_builder.build_training_set()
+indeces = np.sort(np.concatenate([data_builder.train_idx, data_builder.val_idx, data_builder.infer_idx]))
 
-indices = np.sort(np.concatenate([data_builder.train_idx, data_builder.val_idx]))
-
-data_builder.write_preprocessed_data(indices)
+data_builder.write_preprocessed_data(indeces)
